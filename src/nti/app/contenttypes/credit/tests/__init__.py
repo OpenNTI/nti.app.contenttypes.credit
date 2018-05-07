@@ -11,14 +11,21 @@ from zope.component.persistentregistry import PersistentComponents as Components
 
 import zope.testing.cleanup
 
+from nti.app.testing.application_webtest import ApplicationLayerTest
+
+from nti.dataserver.tests.mock_dataserver import DSInjectorMixin
+
+from nti.testing.base import AbstractTestBase
+
+from nti.testing.layers import GCLayerMixin
 from nti.testing.layers import ZopeComponentLayer
 from nti.testing.layers import ConfiguringLayerMixin
 
-from nti.app.testing.application_webtest import ApplicationLayerTest
-
 
 class SharedConfiguringTestLayer(ZopeComponentLayer,
-                                 ConfiguringLayerMixin):
+                                 GCLayerMixin,
+                                 ConfiguringLayerMixin,
+                                 DSInjectorMixin):
 
     set_up_packages = ('nti.app.contenttypes.credit',)
 
@@ -42,4 +49,6 @@ class SharedConfiguringTestLayer(ZopeComponentLayer,
 
 class CreditLayerTest(ApplicationLayerTest):
 
-    layer = SharedConfiguringTestLayer
+    get_configuration_package = AbstractTestBase.get_configuration_package.__func__
+
+    set_up_packages = ('nti.app.contenttypes.credit',)
