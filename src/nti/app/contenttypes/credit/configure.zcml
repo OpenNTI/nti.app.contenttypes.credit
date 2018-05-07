@@ -11,4 +11,24 @@
 
 	<include package="nti.contenttypes.credit" />
 
+    <!-- Generations -->
+    <utility factory=".generations.install._CreditSchemaManager"
+             name="nti.dataserver-app-contenttypes-credit"
+             provides="zope.generations.interfaces.IInstallableSchemaManager" />
+
+    <adapter name="credit"
+             for="nti.dataserver.interfaces.IDataserverFolder
+                  pyramid.interfaces.IRequest"
+             factory=".views.CreditPathAdapter"
+             provides="zope.traversing.interfaces.IPathAdapter" />
+
+    <adapter factory=".adapters.UserAwardedCreditTranscriptFactory"
+             provides=".interfaces.IUserAwardedCreditTranscript"
+             for="nti.coremetadata.interfaces.IUser" />
+
+    <!-- Event listeners -->
+    <subscriber handler=".subscribers.on_site_created"
+                for="nti.site.interfaces.IHostPolicySiteManager
+                     zope.site.interfaces.INewLocalSite" />
+
 </configure>
