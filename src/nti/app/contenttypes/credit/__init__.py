@@ -10,3 +10,6 @@ from __future__ import absolute_import
 
 import zope.i18nmessageid
 MessageFactory = zope.i18nmessageid.MessageFactory(__name__)
+
+CREDIT_PATH_NAME = u'credit'
+CREDIT_DEFINITIONS_VIEW_NAME = u'CreditDefinitions'
