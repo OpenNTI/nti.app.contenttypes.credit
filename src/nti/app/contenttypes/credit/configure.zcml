@@ -16,6 +16,7 @@
              name="nti.dataserver-app-contenttypes-credit"
              provides="zope.generations.interfaces.IInstallableSchemaManager" />
 
+    <!-- Adapters -->
     <adapter name="credit"
              for="nti.dataserver.interfaces.IDataserverFolder
                   pyramid.interfaces.IRequest"
@@ -25,6 +26,36 @@
     <adapter factory=".adapters.UserAwardedCreditTranscriptFactory"
              provides=".interfaces.IUserAwardedCreditTranscript"
              for="nti.coremetadata.interfaces.IUser" />
+
+    <adapter factory=".adapters.awarded_credit_to_user"
+             provides="nti.coremetadata.interfaces.IUser"
+             for=".interfaces.IUserAwardedCredit" />
+
+    <!-- Decorators -->
+    <subscriber factory=".decorators._UserTranscriptDecorator"
+                provides="nti.externalization.interfaces.IExternalMappingDecorator"
+                for="nti.coremetadata.interfaces.IUser
+                     pyramid.interfaces.IRequest" />
+
+    <subscriber factory=".decorators._CreditDefinitionDecorator"
+                provides="nti.externalization.interfaces.IExternalMappingDecorator"
+                for="nti.contenttypes.credit.interfaces.ICreditDefinition
+                     pyramid.interfaces.IRequest" />
+
+    <include package="nti.wref" />
+    <include package="nti.mimetype" />
+
+    <!-- Externalization -->
+    <include package="nti.externalization" file="meta.zcml" />
+    <include package="nti.externalization" />
+
+    <ext:registerAutoPackageIO
+        root_interfaces=".interfaces.IUserAwardedCredit"
+        modules=".credit" />
+
+    <adapter factory=".internalization._UserAwardedCreditUpdater"
+             for=".interfaces.IUserAwardedCredit"
+             provides="nti.externalization.interfaces.IInternalObjectUpdater" />
 
     <!-- Event listeners -->
     <subscriber handler=".subscribers.on_site_created"

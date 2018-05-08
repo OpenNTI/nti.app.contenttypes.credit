@@ -15,6 +15,7 @@ from zope import interface
 
 from zope.annotation import factory as an_factory
 
+from nti.app.contenttypes.credit.interfaces import IUserAwardedCredit
 from nti.app.contenttypes.credit.interfaces import IUserAwardedCreditTranscript
 
 from nti.containers.containers import CaseInsensitiveCheckingLastModifiedBTreeContainer
@@ -24,6 +25,8 @@ from nti.coremetadata.interfaces import IUser
 from nti.schema.fieldproperty import createDirectFieldProperties
 
 from nti.schema.schema import SchemaConfigured
+
+from nti.traversal.traversal import find_interface
 
 AWARDED_CREDIT_ANNOTATION_KEY = 'nti.app.contenttypes.credit.interfaces.IUserAwardedCreditTranscript'
 
@@ -35,7 +38,7 @@ logger = __import__('logging').getLogger(__name__)
 class UserAwardedCreditTranscript(CaseInsensitiveCheckingLastModifiedBTreeContainer,
                                   SchemaConfigured):
     """
-    Stores :class:`IUserAwardedCredit`.
+    Stores :class:`IAwardedCredit`.
     """
     createDirectFieldProperties(IUserAwardedCreditTranscript)
 
@@ -57,3 +60,9 @@ def _create_annotation(obj, factory):
 
 def UserAwardedCreditTranscriptFactory(obj):
     return _create_annotation(obj, _UserAwardedCreditTranscriptFactory)
+
+
+@component.adapter(IUserAwardedCredit)
+@interface.implementer(IUser)
+def awarded_credit_to_user(awarded_credit):
+    return find_interface(awarded_credit, IUser)

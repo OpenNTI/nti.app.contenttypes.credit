@@ -21,7 +21,7 @@ from zope.container.interfaces import IContainer
 from nti.base.interfaces import ICreated
 from nti.base.interfaces import ILastModified
 
-from nti.contenttypes.credit.interfaces import ICreditDefinition
+from nti.contenttypes.credit.interfaces import ICreditTranscript, IAwardedCredit
 
 from nti.ntiids.schema import ValidNTIID
 
@@ -30,5 +30,17 @@ from nti.schema.field import Object
 from nti.schema.field import DecodingValidTextLine as ValidTextLine
 
 
-class IUserAwardedCreditTranscript(interface.Interface):
-    pass
+class IUserAwardedCredit(IAwardedCredit):
+    """
+    A :class:`IAwardedCredit` that was granted by another user.
+    """
+
+
+class IUserAwardedCreditTranscript(ICreditTranscript):
+    """
+    The storage container for :class:`IUserAwardedCredit`.
+    """
+
+    contains(IUserAwardedCredit)
+
+
