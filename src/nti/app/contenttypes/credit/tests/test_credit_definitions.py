@@ -97,6 +97,7 @@ class TestCreditDefinitions(CreditLayerTest):
         res = res.json_body
         assert_that(res, has_entries('credit_units', is_('new_units'),
                                      'credit_type', is_('new_types'),
+                                     'deleted', is_(False),
                                      'NTIID', is_(original_ntiid)))
 
         # Edit
@@ -128,6 +129,10 @@ class TestCreditDefinitions(CreditLayerTest):
         credit_res = credit_res.json_body
         credit_items = credit_res.get('Items')
         assert_that(credit_items, has_length(1))
+        assert_that(credit_items[0], has_entries('credit_units', is_(new_units),
+                                                 'credit_type', is_(new_type),
+                                                 'deleted', is_(True),
+                                                 'NTIID', is_(original_ntiid)))
 
         # Recreate by posting some object to def container
         self.testapp.put_json(credit_def_url,
@@ -141,3 +146,4 @@ class TestCreditDefinitions(CreditLayerTest):
         assert_that(credit_items, has_length(1))
         def_item = credit_items[0]
         assert_that(def_item['NTIID'], is_(original_ntiid))
+        assert_that(def_item['deleted'], is_(False))

@@ -30,7 +30,11 @@ from nti.app.base.abstract_views import AbstractAuthenticatedView
 from nti.app.contenttypes.credit import MessageFactory as _
 
 from nti.app.contenttypes.credit import CREDIT_PATH_NAME
+from nti.app.contenttypes.credit import USER_TRANSCRIPT_VIEW_NAME
 from nti.app.contenttypes.credit import CREDIT_DEFINITIONS_VIEW_NAME
+
+from nti.app.contenttypes.credit.interfaces import IUserAwardedCredit
+from nti.app.contenttypes.credit.interfaces import IUserAwardedCreditTranscript
 
 from nti.app.externalization.error import raise_json_error
 
@@ -44,12 +48,16 @@ from nti.common.string import is_true
 from nti.contenttypes.credit.interfaces import ICreditDefinition
 from nti.contenttypes.credit.interfaces import ICreditDefinitionContainer
 
+from nti.coremetadata.interfaces import IUser
 from nti.coremetadata.interfaces import IDeletedObjectPlaceholder
 
 from nti.dataserver.authorization import ACT_CONTENT_EDIT
 
+from nti.dataserver.authorization import is_admin
+from nti.dataserver.authorization import is_site_admin
 from nti.dataserver.authorization import is_admin_or_content_admin_or_site_admin
 
+from nti.dataserver.interfaces import ISiteAdminUtility
 from nti.dataserver.interfaces import IDataserverFolder
 
 from nti.externalization.interfaces import LocatedExternalDict
@@ -189,3 +197,87 @@ class CreditDefinitionDeleteView(UGDDeleteView):
         if not IDeletedObjectPlaceholder.providedBy(theObject):
             interface.alsoProvides(theObject, IDeletedObjectPlaceholder)
         return theObject
+
+
+class UserAwardedCreditMixin(object):
+    """
+    A mixin that ensures only appropriate admins can grant credit.
+    """
+
+    @Lazy
+    def user_context(self):
+        return IUser(self.context)
+
+    @Lazy
+    def user_awarded_transcript(self):
+        return IUserAwardedCreditTranscript(self.user_context)
+
+    def check_access(self):
+        result = is_admin(self.remoteUser)
+        if not result and is_site_admin(self.remoteUser):
+            site_admin_utility = component.getUtility(ISiteAdminUtility)
+            result = site_admin_utility.can_administer_user(self.remoteUser,
+                                                            self.user_context)
+        if not result:
+            raise hexc.HTTPForbidden(_('Must be an admin to award credit'))
+
+
+@view_config(route_name='objects.generic.traversal',
+             context=IUser,
+             request_method='PUT',
+             name=USER_TRANSCRIPT_VIEW_NAME,
+             renderer='rest')
+class UserAwardedCreditInsertView(AbstractAuthenticatedView,
+                                  ModeledContentUploadRequestUtilsMixin,
+                                  UserAwardedCreditMixin):
+    """
+    Allow creating a new credit definition to this pseudo-collection.
+    """
+
+    def _do_call(self):
+        self.check_access()
+        new_awarded_credit = self.readCreateUpdateContentObject(self.remoteUser)
+        container = self.user_awarded_transcript
+        container[new_awarded_credit.ntiid] = new_awarded_credit
+        logger.info('Granted credit to user (%s) (remote_user=%s)',
+                    self.user_context, self.remoteUser)
+        return new_awarded_credit
+
+
+@view_config(route_name='objects.generic.traversal',
+             context=IUserAwardedCredit,
+             request_method='PUT',
+             renderer='rest')
+class UserAwardedCreditPutView(UGDPutView,
+                               UserAwardedCreditMixin):
+    """
+    Allow editing of a :class:`ICreditDefinition`.
+    """
+
+    def __call__(self):
+        self.check_access()
+        return super(UserAwardedCreditPutView, self).__call__()
+
+
+@view_config(route_name='objects.generic.traversal',
+             context=IUserAwardedCredit,
+             request_method='DELETE',
+             renderer='rest')
+class UserAwardedCreditDeleteView(UGDDeleteView,
+                                  UserAwardedCreditMixin):
+    """
+    Allow editing of a :class:`ICreditDefinition`.
+    """
+
+    def _do_delete_object(self, awarded_credit):
+        try:
+            del self.user_awarded_transcript[awarded_credit.ntiid]
+        except KeyError:
+            pass
+        logger.info('Deleted credit granted to user (%s) (remote_user=%s)',
+                    self.user_context, self.remoteUser)
+        return awarded_credit
+
+    def __call__(self):
+        self.check_access()
+        return super(UserAwardedCreditDeleteView, self).__call__()
