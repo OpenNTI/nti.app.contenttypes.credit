@@ -37,15 +37,24 @@
                 for="nti.coremetadata.interfaces.IUser
                      pyramid.interfaces.IRequest" />
 
+    <subscriber factory=".decorators._UserAwardedCreditDecorator"
+                provides="nti.externalization.interfaces.IExternalMappingDecorator"
+                for="nti.app.contenttypes.credit.interfaces.IUserAwardedCredit
+                     pyramid.interfaces.IRequest" />
+
     <subscriber factory=".decorators._CreditDefinitionDecorator"
                 provides="nti.externalization.interfaces.IExternalMappingDecorator"
                 for="nti.contenttypes.credit.interfaces.ICreditDefinition
                      pyramid.interfaces.IRequest" />
 
-    <include package="nti.wref" />
-    <include package="nti.mimetype" />
+    <subscriber factory=".decorators._AdminCreditDefinitionLinkDecorator"
+                provides="nti.externalization.interfaces.IExternalMappingDecorator"
+                for="nti.contenttypes.credit.interfaces.ICreditDefinition
+                     pyramid.interfaces.IRequest" />
 
     <!-- Externalization -->
+    <include package="nti.wref" />
+    <include package="nti.mimetype" />
     <include package="nti.externalization" file="meta.zcml" />
     <include package="nti.externalization" />
 
@@ -56,6 +65,11 @@
     <adapter factory=".internalization._UserAwardedCreditUpdater"
              for=".interfaces.IUserAwardedCredit"
              provides="nti.externalization.interfaces.IInternalObjectUpdater" />
+
+    <subscriber factory="nti.appserver.pyramid_renderers_edit_link_decorator.EditLinkDecorator"
+                provides="nti.externalization.interfaces.IExternalMappingDecorator"
+                for="nti.contenttypes.credit.interfaces.ICreditDefinition
+                     pyramid.interfaces.IRequest" />
 
     <!-- Event listeners -->
     <subscriber handler=".subscribers.on_site_created"

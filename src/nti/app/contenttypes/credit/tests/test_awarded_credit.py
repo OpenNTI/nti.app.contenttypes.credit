@@ -116,6 +116,8 @@ class TestAwardedCredit(CreditLayerTest):
                                      'credit_definition', has_entry('NTIID', credit_definition_ntiid),
                                      'amount', is_(amount),
                                      'NTIID', not_none()))
+        self.require_link_href_with_rel(res, 'edit')
+        self.require_link_href_with_rel(res, 'delete')
 
         # Credit definition normalization #1
         awarded_def['credit_definition'] = {'ntiid': credit_definition_ntiid}
