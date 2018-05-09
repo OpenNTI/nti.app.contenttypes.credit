@@ -289,9 +289,9 @@ class UserTranscriptView(AbstractAuthenticatedView,
             and (  self.definition_units_filter is None \
                 or self.definition_units_filter == awarded_credit.credit_definition.credit_units) \
             and (  self.not_before is None \
-                or self.not_before < awarded_credit.created) \
+                or self.not_before < awarded_credit.awarded_date) \
             and (  self.not_after is None \
-                or self.not_after > awarded_credit.created)
+                or self.not_after > awarded_credit.awarded_date)
 
     def filter_credits(self, awarded_credits):
         return [x for x in awarded_credits if self._include_item(x)]

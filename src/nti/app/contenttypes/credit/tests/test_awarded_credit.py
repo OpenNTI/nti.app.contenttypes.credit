@@ -114,6 +114,7 @@ class TestAwardedCredit(CreditLayerTest):
                        'title': title,
                        'description': desc,
                        'credit_definition': credit_definition_obj,
+                       'awarded_date': "2013-08-13T06:00:00+00:00",
                        'amount': amount}
 
         # Award credit to user
