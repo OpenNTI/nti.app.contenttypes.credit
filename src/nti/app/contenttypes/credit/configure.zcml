@@ -31,6 +31,10 @@
              provides="nti.coremetadata.interfaces.IUser"
              for=".interfaces.IUserAwardedCredit" />
 
+    <subscriber factory=".adapters.UserAwardedCreditTranscriptFactory"
+                provides="nti.contenttypes.credit.interfaces.ICreditTranscript"
+                for="nti.coremetadata.interfaces.IUser" />
+
     <!-- Decorators -->
     <subscriber factory=".decorators._UserTranscriptDecorator"
                 provides="nti.externalization.interfaces.IExternalMappingDecorator"

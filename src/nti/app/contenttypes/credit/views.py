@@ -8,6 +8,8 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import absolute_import
 
+from datetime import datetime
+
 from pyramid import httpexceptions as hexc
 
 from pyramid.threadlocal import get_current_request
@@ -38,6 +40,7 @@ from nti.app.contenttypes.credit.interfaces import IUserAwardedCreditTranscript
 
 from nti.app.externalization.error import raise_json_error
 
+from nti.app.externalization.view_mixins import BatchingUtilsMixin
 from nti.app.externalization.view_mixins import ModeledContentUploadRequestUtilsMixin
 
 from nti.appserver.ugd_edit_views import UGDPutView
@@ -45,6 +48,7 @@ from nti.appserver.ugd_edit_views import UGDDeleteView
 
 from nti.common.string import is_true
 
+from nti.contenttypes.credit.interfaces import ICreditTranscript
 from nti.contenttypes.credit.interfaces import ICreditDefinition
 from nti.contenttypes.credit.interfaces import ICreditDefinitionContainer
 
@@ -100,12 +104,7 @@ class CreditDefinitionView(AbstractAuthenticatedView):
 
     @Lazy
     def _params(self):
-        result = {}
-        request = get_current_request()
-        if request is not None:
-            values = request.params
-            result = CaseInsensitiveDict(values)
-        return result
+        return CaseInsensitiveDict(self.request.params)
 
     @Lazy
     def hide_deleted(self):
@@ -220,6 +219,101 @@ class UserAwardedCreditMixin(object):
                                                             self.user_context)
         if not result:
             raise hexc.HTTPForbidden(_('Must be an admin to award credit'))
+
+
+@view_config(route_name='objects.generic.traversal',
+             context=IUser,
+             request_method='GET',
+             name=USER_TRANSCRIPT_VIEW_NAME,
+             renderer='rest')
+class UserTranscriptView(AbstractAuthenticatedView,
+                         UserAwardedCreditMixin,
+                         BatchingUtilsMixin):
+    """
+    Allow fetching a user's transcript.
+    """
+
+    _DEFAULT_BATCH_SIZE = None
+    _DEFAULT_BATCH_START = 0
+
+    @Lazy
+    def _params(self):
+        return CaseInsensitiveDict(self.request.params)
+
+    def _get_date_param(self, param_name):
+        # pylint: disable=no-member
+        param_val = self._params.get(param_name)
+        if param_val is None:
+            return None
+        try:
+            result = float(param_val)
+        except ValueError:
+            raise_json_error(self.request,
+                             hexc.HTTPUnprocessableEntity,
+                             {
+                                 'message': _(u'Invalid timestamp boundary.'),
+                             },
+                             None)
+        return datetime.utcfromtimestamp(result)
+
+    @Lazy
+    def definition_type_filter(self):
+        return self._params.get('definitionType')
+
+    @Lazy
+    def definition_units_filter(self):
+        return self._params.get('definitionUnits')
+
+    @Lazy
+    def not_before(self):
+        return self._get_date_param("notBefore")
+
+    @Lazy
+    def not_after(self):
+        return self._get_date_param("notAfter")
+
+    def check_access(self):
+        return self.remoteUser == self.context \
+            or super(UserTranscriptView, self).check_access()
+
+    def get_awarded_credits(self):
+        awarded_credits = []
+        transcripts = component.subscribers((self.context,), ICreditTranscript)
+        for transcript in transcripts:
+            awarded_credits.extend(transcript.iter_awarded_credits())
+        return awarded_credits
+
+    def _include_item(self, awarded_credit):
+        return  (  self.definition_type_filter is None \
+                or self.definition_type_filter == awarded_credit.credit_definition.credit_type) \
+            and (  self.definition_units_filter is None \
+                or self.definition_units_filter == awarded_credit.credit_definition.credit_units) \
+            and (  self.not_before is None \
+                or self.not_before < awarded_credit.created) \
+            and (  self.not_after is None \
+                or self.not_after > awarded_credit.created)
+
+    def filter_credits(self, awarded_credits):
+        return [x for x in awarded_credits if self._include_item(x)]
+
+    def sort_credits(self, awarded_credits):
+        """
+        Sort desc from most recently created.
+        """
+        return sorted(awarded_credits, key=lambda x: x.created, reverse=True)
+
+    def __call__(self):
+        self.check_access()
+        awarded_credits = self.get_awarded_credits()
+        included_credits = self.filter_credits(awarded_credits)
+        included_credits = self.sort_credits(included_credits)
+
+        result = LocatedExternalDict()
+        result[ITEMS] = included_credits
+        result[TOTAL] = len(awarded_credits)
+        result[ITEM_COUNT] = len(included_credits)
+        self._batch_items_iterable(result, included_credits)
+        return result
 
 
 @view_config(route_name='objects.generic.traversal',

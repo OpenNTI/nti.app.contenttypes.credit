@@ -42,6 +42,8 @@ class UserAwardedCreditTranscript(CaseInsensitiveCheckingLastModifiedBTreeContai
     """
     createDirectFieldProperties(IUserAwardedCreditTranscript)
 
+    def iter_awarded_credits(self):
+        return iter(self.values())
 
 _UserAwardedCreditTranscriptFactory = an_factory(UserAwardedCreditTranscript,
                                                 AWARDED_CREDIT_ANNOTATION_KEY)
