@@ -9,8 +9,10 @@ from __future__ import absolute_import
 
 from hamcrest import is_
 from hamcrest import is_not
+from hamcrest import contains
 from hamcrest import not_none
 from hamcrest import has_entry
+from hamcrest import has_length
 from hamcrest import assert_that
 from hamcrest import has_entries
 does_not = is_not
@@ -97,6 +99,12 @@ class TestAwardedCredit(CreditLayerTest):
         user_transcript_url = self.require_link_href_with_rel(user_ext,
                                                               USER_TRANSCRIPT_VIEW_NAME)
 
+        # Get transcript
+        user_credits = self.testapp.get(user_transcript_url).json_body
+        assert_that(user_credits, has_entries('Total', is_(0),
+                                              'Items', has_length(0),
+                                              'ItemCount', is_(0)))
+
         credit_definition_obj = self._create_credit_def()
         credit_definition_ntiid = credit_definition_obj['NTIID']
         title = u'awarded credit title'
@@ -111,6 +119,7 @@ class TestAwardedCredit(CreditLayerTest):
         # Award credit to user
         res = self.testapp.put_json(user_transcript_url, awarded_def)
         res = res.json_body
+        awarded_credit_ntiid1 = res.get('NTIID')
         assert_that(res, has_entries('title', is_(title),
                                      'description', is_(desc),
                                      'credit_definition', has_entry('NTIID', credit_definition_ntiid),
@@ -119,10 +128,16 @@ class TestAwardedCredit(CreditLayerTest):
         self.require_link_href_with_rel(res, 'edit')
         self.require_link_href_with_rel(res, 'delete')
 
+        user_credits = self.testapp.get(user_transcript_url).json_body
+        assert_that(user_credits, has_entries('Total', is_(1),
+                                              'Items', has_length(1),
+                                              'ItemCount', is_(1)))
+
         # Credit definition normalization #1
         awarded_def['credit_definition'] = {'ntiid': credit_definition_ntiid}
         res = self.testapp.put_json(user_transcript_url, awarded_def)
         res = res.json_body
+        awarded_credit_ntiid2 = res.get('NTIID')
         assert_that(res, has_entries('title', is_(title),
                                      'description', is_(desc),
                                      'credit_definition', has_entry('NTIID', credit_definition_ntiid),
@@ -133,6 +148,7 @@ class TestAwardedCredit(CreditLayerTest):
         awarded_def['credit_definition'] = credit_definition_ntiid
         res = self.testapp.put_json(user_transcript_url, awarded_def)
         res = res.json_body
+        awarded_credit_ntiid3 = res.get('NTIID')
         awarded_credit_href = res.get('href')
         assert_that(awarded_credit_href, not_none())
         assert_that(res, has_entries('title', is_(title),
@@ -150,6 +166,27 @@ class TestAwardedCredit(CreditLayerTest):
                                      'credit_definition', has_entry('NTIID', credit_definition_ntiid),
                                      'amount', is_(10),
                                      'NTIID', not_none()))
+
+        # Get with filters and batching
+        user_credits = self.testapp.get(user_transcript_url).json_body
+        assert_that(user_credits, has_entries('Total', is_(3),
+                                              'Items', has_length(3),
+                                              'ItemCount', is_(3)))
+
+        user_credits = self.testapp.get('%s?batchSize=1' % user_transcript_url).json_body
+        assert_that(user_credits, has_entries('Total', is_(3),
+                                              'Items', has_length(1),
+                                              'ItemCount', is_(1)))
+        assert_that(user_credits['Items'][0],
+                    has_entry('NTIID', is_(awarded_credit_ntiid3)))
+
+        user_credits = self.testapp.get('%s?definitionType=%s&definitionUnits=%s' % (user_transcript_url, 'new_types', 'new_units'))
+        user_credits = user_credits.json_body
+        assert_that(user_credits, has_entries('Total', is_(3),
+                                              'Items', has_length(3),
+                                              'ItemCount', is_(3)))
+        assert_that([x['NTIID'] for x in user_credits['Items']],
+                    contains(awarded_credit_ntiid3, awarded_credit_ntiid2, awarded_credit_ntiid1))
 
         # Delete
         self.testapp.get(awarded_credit_href)
