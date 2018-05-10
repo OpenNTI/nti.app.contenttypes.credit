@@ -67,6 +67,14 @@ class _UserTranscriptDecorator(AbstractAuthenticatedRequestAwareDecorator):
                     elements=('@@%s' % USER_TRANSCRIPT_VIEW_NAME,))
         _links.append(link)
 
+        if self.remoteUser != context:
+            # Admins can insert
+            link = Link(context,
+                        rel='add_credit',
+                        method='PUT',
+                        elements=('@@%s' % USER_TRANSCRIPT_VIEW_NAME,))
+            _links.append(link)
+
 
 @component.adapter(IUserAwardedCredit)
 @interface.implementer(IExternalMappingDecorator)
