@@ -25,6 +25,7 @@ from nti.coremetadata.interfaces import IUser, IDeletedObjectPlaceholder
 
 from nti.dataserver.authorization import is_admin
 from nti.dataserver.authorization import is_site_admin
+from nti.dataserver.authorization import is_admin_or_site_admin
 from nti.dataserver.authorization import is_admin_or_content_admin_or_site_admin
 
 from nti.dataserver.interfaces import ISiteAdminUtility
@@ -67,7 +68,7 @@ class _UserTranscriptDecorator(AbstractAuthenticatedRequestAwareDecorator):
                     elements=('@@%s' % USER_TRANSCRIPT_VIEW_NAME,))
         _links.append(link)
 
-        if self.remoteUser != context:
+        if is_admin_or_site_admin(self.remoteUser):
             # Admins can insert
             link = Link(context,
                         rel='add_credit',
