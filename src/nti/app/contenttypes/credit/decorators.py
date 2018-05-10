@@ -17,6 +17,8 @@ from nti.app.contenttypes.credit import USER_TRANSCRIPT_VIEW_NAME
 
 from nti.app.renderers.decorators import AbstractAuthenticatedRequestAwareDecorator
 
+from nti.appserver.pyramid_renderers_edit_link_decorator import EditLinkDecorator
+
 from nti.contenttypes.credit.interfaces import ICreditDefinition
 
 from nti.coremetadata.interfaces import IUser, IDeletedObjectPlaceholder
@@ -30,7 +32,10 @@ from nti.dataserver.interfaces import ISiteAdminUtility
 from nti.externalization.interfaces import StandardExternalFields
 from nti.externalization.interfaces import IExternalMappingDecorator
 
+from nti.links.externalization import render_link
+
 from nti.links.links import Link
+
 from nti.app.contenttypes.credit.interfaces import IUserAwardedCredit
 
 LINKS = StandardExternalFields.LINKS
@@ -65,7 +70,7 @@ class _UserTranscriptDecorator(AbstractAuthenticatedRequestAwareDecorator):
 
 @component.adapter(IUserAwardedCredit)
 @interface.implementer(IExternalMappingDecorator)
-class _UserAwardedCreditDecorator(AbstractAuthenticatedRequestAwareDecorator):
+class _UserAwardedCreditDecorator(EditLinkDecorator):
     """
     Decorates user awarded credit objects.
     """
@@ -81,14 +86,20 @@ class _UserAwardedCreditDecorator(AbstractAuthenticatedRequestAwareDecorator):
                                                             user_context)
         return result
 
+    def _get_edit_link(self, _links):
+        for lnk in _links:
+            if getattr(lnk, 'rel', None) == 'edit':
+                return lnk
+
     def _do_decorate_external(self, context, result):
+        super(_UserAwardedCreditDecorator, self)._do_decorate_external(context, result)
         _links = result.setdefault(LINKS, [])
-        for rel in ('edit', 'delete'):
-            link = Link(context, rel=rel)
-            interface.alsoProvides(link, ILocation)
-            link.__name__ = ''
-            link.__parent__ = context
-            _links.append(link)
+        edit_link = self._get_edit_link(_links)
+        if edit_link is not None:
+            edit_ext = render_link(edit_link)
+            delete_ext = dict(edit_ext)
+            delete_ext['rel'] = 'delete'
+            _links.append(delete_ext)
 
 
 @component.adapter(ICreditDefinition)
