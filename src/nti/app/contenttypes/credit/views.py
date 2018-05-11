@@ -297,7 +297,7 @@ class UserTranscriptView(AbstractAuthenticatedView,
 
     def _include_item(self, awarded_credit):
         return  (  self.amount_filter is None \
-                or self.amount_filter <= awarded_credit.amount) \
+                or self.amount_filter < awarded_credit.amount) \
             and (  self.definition_type_filter is None \
                 or self.definition_type_filter == awarded_credit.credit_definition.credit_type) \
             and (  self.definition_units_filter is None \
