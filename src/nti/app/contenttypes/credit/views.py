@@ -240,8 +240,7 @@ class UserTranscriptView(AbstractAuthenticatedView,
     def _params(self):
         return CaseInsensitiveDict(self.request.params)
 
-    def _get_date_param(self, param_name):
-        # pylint: disable=no-member
+    def _get_float_param(self, param_name):
         param_val = self._params.get(param_name)
         if param_val is None:
             return None
@@ -251,10 +250,23 @@ class UserTranscriptView(AbstractAuthenticatedView,
             raise_json_error(self.request,
                              hexc.HTTPUnprocessableEntity,
                              {
-                                 'message': _(u'Invalid timestamp boundary.'),
+                                 'message': _(u'Invalid param.'),
                              },
                              None)
-        return datetime.utcfromtimestamp(result)
+        return result
+
+    def _get_date_param(self, param_name):
+        result = self._get_float_param(param_name)
+        if result is not None:
+            return datetime.utcfromtimestamp(result)
+
+    @Lazy
+    def amount_filter(self):
+        # Amount filter; defaults to zero.
+        result = self._get_float_param('amount')
+        if 'amount' not in self._params:
+            result = 0
+        return result
 
     @Lazy
     def definition_type_filter(self):
@@ -284,7 +296,9 @@ class UserTranscriptView(AbstractAuthenticatedView,
         return awarded_credits
 
     def _include_item(self, awarded_credit):
-        return  (  self.definition_type_filter is None \
+        return  (  self.amount_filter is None \
+                or self.amount_filter <= awarded_credit.amount) \
+            and (  self.definition_type_filter is None \
                 or self.definition_type_filter == awarded_credit.credit_definition.credit_type) \
             and (  self.definition_units_filter is None \
                 or self.definition_units_filter == awarded_credit.credit_definition.credit_units) \
