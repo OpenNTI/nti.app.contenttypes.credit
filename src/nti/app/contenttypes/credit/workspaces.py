@@ -15,12 +15,16 @@ from zope import interface
 
 from zope.container.contained import Contained
 
+from nti.app.authentication import get_remote_user
+
 from nti.app.contenttypes.credit import CREDIT_DEFINITIONS_VIEW_NAME
 
 from nti.appserver.workspaces.interfaces import IWorkspace
 from nti.appserver.workspaces.interfaces import IGlobalCollection
 
 from nti.contenttypes.credit.credit import CreditDefinition
+
+from nti.dataserver.authorization import is_admin_or_content_admin_or_site_admin
 
 from nti.externalization.interfaces import StandardExternalFields
 
@@ -42,7 +46,6 @@ class CreditDefinitionCollectionFactory(Contained):
     __name__ = name
     _workspace = alias('__parent__')
 
-    accepts = (CreditDefinition.mime_type,)
     links = ()
 
     def __init__(self, workspace):
@@ -52,3 +55,12 @@ class CreditDefinitionCollectionFactory(Contained):
     @property
     def container(self):
         return ()
+
+    @property
+    def accepts(self):
+        # Only admins can insert new definitions.
+        result = ()
+        user = get_remote_user()
+        if is_admin_or_content_admin_or_site_admin(user):
+            result = (CreditDefinition.mime_type,)
+        return result
