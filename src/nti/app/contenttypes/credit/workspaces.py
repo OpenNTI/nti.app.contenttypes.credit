@@ -24,10 +24,11 @@ from nti.appserver.workspaces.interfaces import IGlobalCollection
 
 from nti.contenttypes.credit.credit import CreditDefinition
 
+from nti.dataserver.authorization import is_admin_or_content_admin_or_site_admin
+
 from nti.externalization.interfaces import StandardExternalFields
 
 from nti.property.property import alias
-from nti.dataserver.authorization import is_admin_or_content_admin_or_site_admin
 
 logger = __import__('logging').getLogger(__name__)
 
