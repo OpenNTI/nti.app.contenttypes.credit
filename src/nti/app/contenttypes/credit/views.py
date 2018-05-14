@@ -147,7 +147,9 @@ class CreditDefinitionView(AbstractAuthenticatedView):
 class CreditDefinitionInsertView(AbstractAuthenticatedView,
                                  ModeledContentUploadRequestUtilsMixin):
     """
-    Allow creating a new credit definition to this pseudo-collection.
+    Allow creating a new credit definition to this pseudo-collection. If a
+    duplicate definition exists, we raise a 409. If the duplicate is `deleted`,
+    we restore it to a visible state.
     """
 
     def check_access(self):
@@ -167,6 +169,11 @@ class CreditDefinitionInsertView(AbstractAuthenticatedView,
             # If we normalize to an existing, deleted object, restore it.
             logger.info('Restoring credit definition (%s)', result)
             interface.noLongerProvides(result, IDeletedObjectPlaceholder)
+        elif result != new_credit_definition:
+            # Duplicate defs; raise a 409
+            raise_error({'message': _(u"A credit definition of this type already exists."),
+                         'code': 'DuplicateCreditDefinitionError'},
+                        factory=hexc.HTTPConflict)
         else:
             logger.info('Created credit definition (%s)', result)
         return result

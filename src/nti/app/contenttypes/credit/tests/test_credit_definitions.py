@@ -94,13 +94,8 @@ class TestCreditDefinitions(CreditLayerTest):
         self.require_link_href_with_rel(res, 'edit')
         self.require_link_href_with_rel(res, 'delete')
 
-        # De-duped if inserting same
-        res = self.testapp.put_json(credit_def_url, credit_def)
-        res = res.json_body
-        assert_that(res, has_entries('credit_units', is_('new_units'),
-                                     'credit_type', is_('new_types'),
-                                     'deleted', is_(False),
-                                     'NTIID', is_(original_ntiid)))
+        # De-duped raises a 409
+        self.testapp.put_json(credit_def_url, credit_def, status=409)
 
         # Edit
         new_units = 'new_new_units'
