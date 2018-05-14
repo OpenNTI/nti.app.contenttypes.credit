@@ -16,6 +16,9 @@
              name="nti.dataserver-app-contenttypes-credit"
              provides="zope.generations.interfaces.IInstallableSchemaManager" />
 
+    <!-- ACLs -->
+    <adapter factory=".acl.CreditDefinitionACLProvider" />
+
     <!-- Adapters -->
     <adapter name="credit"
              for="nti.dataserver.interfaces.IDataserverFolder
