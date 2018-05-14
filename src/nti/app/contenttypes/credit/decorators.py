@@ -20,8 +20,10 @@ from nti.app.renderers.decorators import AbstractAuthenticatedRequestAwareDecora
 from nti.appserver.pyramid_renderers_edit_link_decorator import EditLinkDecorator
 
 from nti.contenttypes.credit.interfaces import ICreditDefinition
+from nti.contenttypes.credit.interfaces import ICreditTranscript
 
-from nti.coremetadata.interfaces import IUser, IDeletedObjectPlaceholder
+from nti.coremetadata.interfaces import IUser
+from nti.coremetadata.interfaces import IDeletedObjectPlaceholder
 
 from nti.dataserver.authorization import is_admin
 from nti.dataserver.authorization import is_site_admin
@@ -52,7 +54,8 @@ class _UserTranscriptDecorator(AbstractAuthenticatedRequestAwareDecorator):
     """
 
     def _predicate(self, user_context, unused_result):
-        if not self._is_authenticated:
+        if     not self._is_authenticated \
+            or ICreditTranscript(user_context, None) is None:
             return False
         result = is_admin(self.remoteUser) or self.remoteUser == user_context
         if not result and is_site_admin(self.remoteUser):
