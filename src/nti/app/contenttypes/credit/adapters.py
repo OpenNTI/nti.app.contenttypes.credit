@@ -20,6 +20,8 @@ from nti.app.contenttypes.credit.interfaces import IUserAwardedCreditTranscript
 
 from nti.containers.containers import CaseInsensitiveCheckingLastModifiedBTreeContainer
 
+from nti.contenttypes.credit.interfaces import ICreditTranscript
+
 from nti.coremetadata.interfaces import IUser
 
 from nti.schema.fieldproperty import createDirectFieldProperties
@@ -31,6 +33,34 @@ from nti.traversal.traversal import find_interface
 AWARDED_CREDIT_ANNOTATION_KEY = 'nti.app.contenttypes.credit.interfaces.IUserAwardedCreditTranscript'
 
 logger = __import__('logging').getLogger(__name__)
+
+
+@component.adapter(IUser)
+@interface.implementer(ICreditTranscript)
+def empty_user_credit_transcript(unused_user):
+    """
+    An empty :class:`ICreditTranscript` a site can use to disable credit
+    features.
+    """
+    return None
+
+
+@component.adapter(IUser)
+@interface.implementer(ICreditTranscript)
+class UserCreditTranscript(object):
+    """
+    A :class:`ICreditTranscript` that fetchs all awarded credit subscribers.
+    """
+
+    def __init__(self, user):
+        self.context = user
+
+    def iter_awarded_credits(self):
+        awarded_credits = []
+        transcripts = component.subscribers((self.context,), ICreditTranscript)
+        for transcript in transcripts:
+            awarded_credits.extend(transcript.iter_awarded_credits())
+        return awarded_credits
 
 
 @component.adapter(IUser)

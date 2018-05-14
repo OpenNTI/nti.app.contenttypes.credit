@@ -296,11 +296,11 @@ class UserTranscriptView(AbstractAuthenticatedView,
             or super(UserTranscriptView, self).check_access()
 
     def get_awarded_credits(self):
-        awarded_credits = []
-        transcripts = component.subscribers((self.context,), ICreditTranscript)
-        for transcript in transcripts:
-            awarded_credits.extend(transcript.iter_awarded_credits())
-        return awarded_credits
+        user_transcript = ICreditTranscript(self.context, None)
+        result = ()
+        if user_transcript is not None:
+            result = user_transcript.iter_awarded_credits()
+        return result
 
     def _include_item(self, awarded_credit):
         return  (  self.amount_filter is None \

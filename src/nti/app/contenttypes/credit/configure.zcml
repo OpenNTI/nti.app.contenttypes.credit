@@ -34,6 +34,10 @@
              provides="nti.coremetadata.interfaces.IUser"
              for=".interfaces.IUserAwardedCredit" />
 
+    <adapter factory=".adapters.UserCreditTranscript"
+             provides="nti.contenttypes.credit.interfaces.ICreditTranscript"
+             for="nti.coremetadata.interfaces.IUser" />
+
     <subscriber factory=".adapters.UserAwardedCreditTranscriptFactory"
                 provides="nti.contenttypes.credit.interfaces.ICreditTranscript"
                 for="nti.coremetadata.interfaces.IUser" />
