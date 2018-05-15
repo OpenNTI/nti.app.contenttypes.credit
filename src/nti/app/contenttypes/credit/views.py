@@ -228,20 +228,7 @@ class UserAwardedCreditMixin(object):
             raise hexc.HTTPForbidden(_('Must be an admin to award credit'))
 
 
-@view_config(route_name='objects.generic.traversal',
-             context=IUser,
-             request_method='GET',
-             name=USER_TRANSCRIPT_VIEW_NAME,
-             renderer='rest')
-class UserTranscriptView(AbstractAuthenticatedView,
-                         UserAwardedCreditMixin,
-                         BatchingUtilsMixin):
-    """
-    Allow fetching a user's transcript.
-    """
-
-    _DEFAULT_BATCH_SIZE = None
-    _DEFAULT_BATCH_START = 0
+class UserAwardedCreditFilterMixin(object):
 
     @Lazy
     def _params(self):
@@ -291,17 +278,6 @@ class UserTranscriptView(AbstractAuthenticatedView,
     def not_after(self):
         return self._get_date_param("notAfter")
 
-    def check_access(self):
-        return self.remoteUser == self.context \
-            or super(UserTranscriptView, self).check_access()
-
-    def get_awarded_credits(self):
-        user_transcript = ICreditTranscript(self.context, None)
-        result = ()
-        if user_transcript is not None:
-            result = user_transcript.iter_awarded_credits()
-        return result
-
     def _include_item(self, awarded_credit):
         return  (  self.amount_filter is None \
                 or self.amount_filter < awarded_credit.amount) \
@@ -321,7 +297,35 @@ class UserTranscriptView(AbstractAuthenticatedView,
         """
         Sort desc from most recently created.
         """
-        return sorted(awarded_credits, key=lambda x: x.created, reverse=True)
+        return sorted(awarded_credits, key=lambda x: x.awarded_date, reverse=True)
+
+
+@view_config(route_name='objects.generic.traversal',
+             context=IUser,
+             request_method='GET',
+             name=USER_TRANSCRIPT_VIEW_NAME,
+             renderer='rest')
+class UserTranscriptView(AbstractAuthenticatedView,
+                         UserAwardedCreditMixin,
+                         UserAwardedCreditFilterMixin,
+                         BatchingUtilsMixin):
+    """
+    Allow fetching a user's transcript.
+    """
+
+    _DEFAULT_BATCH_SIZE = None
+    _DEFAULT_BATCH_START = 0
+
+    def check_access(self):
+        return self.remoteUser == self.context \
+            or super(UserTranscriptView, self).check_access()
+
+    def get_awarded_credits(self):
+        user_transcript = ICreditTranscript(self.context, None)
+        result = ()
+        if user_transcript is not None:
+            result = user_transcript.iter_awarded_credits()
+        return result
 
     def __call__(self):
         self.check_access()
