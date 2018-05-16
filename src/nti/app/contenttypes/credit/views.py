@@ -293,11 +293,35 @@ class UserAwardedCreditFilterMixin(object):
     def filter_credits(self, awarded_credits):
         return [x for x in awarded_credits if self._include_item(x)]
 
+    @Lazy
+    def sort_descending(self):
+        sort_order = self._params.get('sortOrder')
+        if sort_order:
+            result = sort_order.lower() == 'descending'
+        else:
+            # Default to descending
+            result = True
+        return result
+
+    @Lazy
+    def sort_field(self):
+        sort_on_field = self._params.get('sort') \
+                     or self._params.get('sortOn')
+        if not sort_on_field:
+            sort_on_field = 'awarded_date'
+        return sort_on_field
+
+    def sort_key(self, awarded_credit):
+        if self.sort_field == 'credit_definition':
+            # Credit definition maps to the credit type
+            return awarded_credit.credit_definition.credit_type
+        return getattr(awarded_credit, self.sort_field, '')
+
     def sort_credits(self, awarded_credits):
         """
         Sort desc from most recently created.
         """
-        return sorted(awarded_credits, key=lambda x: x.awarded_date, reverse=True)
+        return sorted(awarded_credits, key=self.sort_key, reverse=self.sort_descending)
 
 
 @view_config(route_name='objects.generic.traversal',
