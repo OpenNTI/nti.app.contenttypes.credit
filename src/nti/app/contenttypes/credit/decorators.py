@@ -98,6 +98,10 @@ class _UserAwardedCreditDecorator(EditLinkDecorator):
                                                             user_context)
         return result
 
+    def _has_permission(self, unused_context):
+        # Overriding parent class since we've validated access already
+        return True
+
     def _get_edit_link(self, _links):
         for lnk in _links:
             if getattr(lnk, 'rel', None) == 'edit':
