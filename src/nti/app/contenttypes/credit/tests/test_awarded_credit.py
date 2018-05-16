@@ -135,6 +135,7 @@ class TestAwardedCredit(CreditLayerTest):
                                               'ItemCount', is_(1)))
 
         # Credit definition normalization #1
+        awarded_def['awarded_date'] = "2013-08-14T06:00:00+00:00"
         awarded_def['credit_definition'] = {'ntiid': credit_definition_ntiid}
         res = self.testapp.put_json(user_transcript_url, awarded_def)
         res = res.json_body
@@ -146,6 +147,7 @@ class TestAwardedCredit(CreditLayerTest):
                                      'NTIID', not_none()))
 
         # Credit definition normalization #2
+        awarded_def['awarded_date'] = "2013-08-15T06:00:00+00:00"
         awarded_def['credit_definition'] = credit_definition_ntiid
         res = self.testapp.put_json(user_transcript_url, awarded_def)
         res = res.json_body
@@ -159,6 +161,7 @@ class TestAwardedCredit(CreditLayerTest):
                                      'NTIID', not_none()))
 
         # Zero amount credits get filtered out (3 results returned instead of 4).
+        awarded_def['awarded_date'] = "2013-08-16T06:00:00+00:00"
         awarded_def['amount'] = 0
         self.testapp.put_json(user_transcript_url, awarded_def)
 
