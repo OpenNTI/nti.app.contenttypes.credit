@@ -279,6 +279,7 @@ class UserAwardedCreditFilterMixin(object):
         return self._get_date_param("notAfter")
 
     def _include_item(self, awarded_credit):
+        # Inclusive on dates
         return  (  self.amount_filter is None \
                 or self.amount_filter < awarded_credit.amount) \
             and (  self.definition_type_filter is None \
@@ -286,9 +287,9 @@ class UserAwardedCreditFilterMixin(object):
             and (  self.definition_units_filter is None \
                 or self.definition_units_filter == awarded_credit.credit_definition.credit_units) \
             and (  self.not_before is None \
-                or self.not_before < awarded_credit.awarded_date) \
+                or self.not_before <= awarded_credit.awarded_date) \
             and (  self.not_after is None \
-                or self.not_after > awarded_credit.awarded_date)
+                or self.not_after >= awarded_credit.awarded_date)
 
     def filter_credits(self, awarded_credits):
         return [x for x in awarded_credits if self._include_item(x)]
@@ -315,7 +316,12 @@ class UserAwardedCreditFilterMixin(object):
         if self.sort_field == 'credit_definition':
             # Credit definition maps to the credit type
             return awarded_credit.credit_definition.credit_type
-        return getattr(awarded_credit, self.sort_field, '')
+        field = getattr(awarded_credit, self.sort_field, '')
+        try:
+            result = field.lower()
+        except AttributeError:
+            result = field
+        return result
 
     def sort_credits(self, awarded_credits):
         """
