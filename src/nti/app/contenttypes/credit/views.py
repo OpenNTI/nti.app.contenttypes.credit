@@ -315,12 +315,14 @@ class UserAwardedCreditFilterMixin(object):
     def sort_key(self, awarded_credit):
         if self.sort_field == 'credit_definition':
             # Credit definition maps to the credit type
-            return awarded_credit.credit_definition.credit_type
-        field = getattr(awarded_credit, self.sort_field, '')
+            value = awarded_credit.credit_definition.credit_type
+        else:
+            value = getattr(awarded_credit, self.sort_field, '')
+
         try:
-            result = field.lower()
+            result = value.lower()
         except AttributeError:
-            result = field
+            result = value
         return result
 
     def sort_credits(self, awarded_credits):
