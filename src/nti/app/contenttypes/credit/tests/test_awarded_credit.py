@@ -15,6 +15,7 @@ from hamcrest import has_entry
 from hamcrest import has_length
 from hamcrest import assert_that
 from hamcrest import has_entries
+from hamcrest import contains_inanyorder
 does_not = is_not
 
 from zope import component
@@ -195,6 +196,31 @@ class TestAwardedCredit(CreditLayerTest):
                                               'ItemCount', is_(3)))
         assert_that([x['NTIID'] for x in user_credits['Items']],
                     contains(awarded_credit_ntiid3, awarded_credit_ntiid2, awarded_credit_ntiid1))
+
+        # Sorting
+        user_credits = self.testapp.get('%s?sortOn=awarded_date&sortOrder=ASCENDING' % user_transcript_url)
+        user_credits = user_credits.json_body
+        assert_that(user_credits, has_entries('Total', is_(4),
+                                              'Items', has_length(3),
+                                              'ItemCount', is_(3)))
+        assert_that([x['NTIID'] for x in user_credits['Items']],
+                    contains(awarded_credit_ntiid1, awarded_credit_ntiid2, awarded_credit_ntiid3))
+
+        user_credits = self.testapp.get('%s?sortOn=awarded_date&sortOrder=DESCENDING' % user_transcript_url)
+        user_credits = user_credits.json_body
+        assert_that(user_credits, has_entries('Total', is_(4),
+                                              'Items', has_length(3),
+                                              'ItemCount', is_(3)))
+        assert_that([x['NTIID'] for x in user_credits['Items']],
+                    contains(awarded_credit_ntiid3, awarded_credit_ntiid2, awarded_credit_ntiid1))
+
+        user_credits = self.testapp.get('%s?sortOn=credit_definition&sortOrder=ASCENDING' % user_transcript_url)
+        user_credits = user_credits.json_body
+        assert_that(user_credits, has_entries('Total', is_(4),
+                                              'Items', has_length(3),
+                                              'ItemCount', is_(3)))
+        assert_that([x['NTIID'] for x in user_credits['Items']],
+                    contains_inanyorder(awarded_credit_ntiid1, awarded_credit_ntiid2, awarded_credit_ntiid3))
 
         # Delete
         self.testapp.get(awarded_credit_href)
