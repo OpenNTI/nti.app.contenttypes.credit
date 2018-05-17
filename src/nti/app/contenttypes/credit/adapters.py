@@ -13,7 +13,7 @@ from ZODB.interfaces import IConnection
 from zope import component
 from zope import interface
 
-from zope.annotation import factory as an_factory
+from zope.annotation.interfaces import IAnnotations
 
 from nti.app.contenttypes.credit.interfaces import IUserAwardedCredit
 from nti.app.contenttypes.credit.interfaces import IUserAwardedCreditTranscript
@@ -75,23 +75,20 @@ class UserAwardedCreditTranscript(CaseInsensitiveCheckingLastModifiedBTreeContai
     def iter_awarded_credits(self):
         return iter(self.values())
 
-_UserAwardedCreditTranscriptFactory = an_factory(UserAwardedCreditTranscript,
-                                                AWARDED_CREDIT_ANNOTATION_KEY)
 
-
-def _create_annotation(obj, factory):
-    result = factory(obj)
-    if IConnection(result, None) is None:
-        try:
-            # pylint: disable=too-many-function-args
-            IConnection(obj).add(result)
-        except (TypeError, AttributeError):  # pragma: no cover
-            pass
+def UserAwardedCreditTranscriptFactory(user):
+    result = None
+    annotations = IAnnotations(user)
+    KEY = AWARDED_CREDIT_ANNOTATION_KEY
+    try:
+        result = annotations[KEY]
+    except KeyError:
+        result = UserAwardedCreditTranscript()
+        annotations[KEY] = result
+        result.__name__ = KEY
+        result.__parent__ = user
+        IConnection(user).add(result)
     return result
-
-
-def UserAwardedCreditTranscriptFactory(obj):
-    return _create_annotation(obj, _UserAwardedCreditTranscriptFactory)
 
 
 @component.adapter(IUserAwardedCredit)
