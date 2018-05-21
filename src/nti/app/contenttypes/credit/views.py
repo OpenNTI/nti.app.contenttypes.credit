@@ -277,7 +277,7 @@ class UserAwardedCreditFilterMixin(object):
 
     @Lazy
     def definition_type_filter(self):
-        return self._params.get('definitionType')
+        return self.request.params.getall('definitionType')
 
     @Lazy
     def definition_units_filter(self):
@@ -295,8 +295,8 @@ class UserAwardedCreditFilterMixin(object):
         # Inclusive on dates
         return  (  self.amount_filter is None \
                 or self.amount_filter < awarded_credit.amount) \
-            and (  self.definition_type_filter is None \
-                or self.definition_type_filter == awarded_credit.credit_definition.credit_type) \
+            and (  not self.definition_type_filter \
+                or awarded_credit.credit_definition.credit_type in self.definition_type_filter) \
             and (  self.definition_units_filter is None \
                 or self.definition_units_filter == awarded_credit.credit_definition.credit_units) \
             and (  self.not_before is None \
