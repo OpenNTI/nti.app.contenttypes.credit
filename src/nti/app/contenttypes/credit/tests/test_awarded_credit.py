@@ -94,6 +94,8 @@ class TestAwardedCredit(CreditLayerTest):
         with mock_dataserver.mock_db_trans(self.ds):
             self._create_user(non_admin_username)
 
+        user_environ = self._make_extra_environ(user=non_admin_username)
+
         resolve_href = '/dataserver2/ResolveUser/%s?filter_by_site_community=False' % non_admin_username
         user_ext = self.testapp.get(resolve_href).json_body
         user_ext = user_ext['Items'][0]
@@ -102,6 +104,11 @@ class TestAwardedCredit(CreditLayerTest):
 
         # Get transcript
         user_credits = self.testapp.get(user_transcript_url).json_body
+        assert_that(user_credits, has_entries('Total', is_(0),
+                                              'Items', has_length(0),
+                                              'ItemCount', is_(0)))
+
+        user_credits = self.testapp.get(user_transcript_url, extra_environ=user_environ).json_body
         assert_that(user_credits, has_entries('Total', is_(0),
                                               'Items', has_length(0),
                                               'ItemCount', is_(0)))
@@ -119,6 +126,8 @@ class TestAwardedCredit(CreditLayerTest):
                        'amount': amount}
 
         # Award credit to user
+        self.testapp.put_json(user_transcript_url, awarded_def,
+                              extra_environ=user_environ, status=403)
         res = self.testapp.put_json(user_transcript_url, awarded_def)
         res = res.json_body
         awarded_credit_ntiid1 = res.get('NTIID')
@@ -167,6 +176,10 @@ class TestAwardedCredit(CreditLayerTest):
         self.testapp.put_json(user_transcript_url, awarded_def, status=422)
 
         # Edits
+        self.testapp.put_json(awarded_credit_href,
+                              {'amount': 10,
+                               'title': 'new_title_1000'},
+                              extra_environ=user_environ, status=403)
         res = self.testapp.put_json(awarded_credit_href, {'amount': 10,
                                                           'title': 'new_title_1000'})
         res = res.json_body
@@ -190,6 +203,14 @@ class TestAwardedCredit(CreditLayerTest):
                     has_entry('NTIID', is_(awarded_credit_ntiid3)))
 
         user_credits = self.testapp.get('%s?definitionType=%s&definitionUnits=%s' % (user_transcript_url, 'new_types', 'new_units'))
+        user_credits = user_credits.json_body
+        assert_that(user_credits, has_entries('Total', is_(3),
+                                              'Items', has_length(3),
+                                              'ItemCount', is_(3)))
+        assert_that([x['NTIID'] for x in user_credits['Items']],
+                    contains(awarded_credit_ntiid3, awarded_credit_ntiid2, awarded_credit_ntiid1))
+
+        user_credits = self.testapp.get('%s?definitionType=%s&definitionType=%s' % (user_transcript_url, 'new_types', 'new_types_dne'))
         user_credits = user_credits.json_body
         assert_that(user_credits, has_entries('Total', is_(3),
                                               'Items', has_length(3),
@@ -223,8 +244,7 @@ class TestAwardedCredit(CreditLayerTest):
                     contains_inanyorder(awarded_credit_ntiid1, awarded_credit_ntiid2, awarded_credit_ntiid3))
 
         # Delete
+        self.testapp.delete(awarded_credit_href, extra_environ=user_environ, status=403)
         self.testapp.get(awarded_credit_href)
         self.testapp.delete(awarded_credit_href)
         self.testapp.get(awarded_credit_href, status=404)
-
-        # FIXME test permissions
