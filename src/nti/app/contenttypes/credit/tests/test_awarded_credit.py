@@ -161,10 +161,10 @@ class TestAwardedCredit(CreditLayerTest):
                                      'amount', is_(amount),
                                      'NTIID', not_none()))
 
-        # Zero amount credits get filtered out (3 results returned instead of 4).
+        # Cannot award zero amount credits get filtered out
         awarded_def['awarded_date'] = "2013-08-16T06:00:00+00:00"
         awarded_def['amount'] = 0
-        self.testapp.put_json(user_transcript_url, awarded_def)
+        self.testapp.put_json(user_transcript_url, awarded_def, status=422)
 
         # Edits
         res = self.testapp.put_json(awarded_credit_href, {'amount': 10,
@@ -178,12 +178,12 @@ class TestAwardedCredit(CreditLayerTest):
 
         # Get with filters and batching
         user_credits = self.testapp.get(user_transcript_url).json_body
-        assert_that(user_credits, has_entries('Total', is_(4),
+        assert_that(user_credits, has_entries('Total', is_(3),
                                               'Items', has_length(3),
                                               'ItemCount', is_(3)))
 
         user_credits = self.testapp.get('%s?batchSize=1' % user_transcript_url).json_body
-        assert_that(user_credits, has_entries('Total', is_(4),
+        assert_that(user_credits, has_entries('Total', is_(3),
                                               'Items', has_length(1),
                                               'ItemCount', is_(1)))
         assert_that(user_credits['Items'][0],
@@ -191,7 +191,7 @@ class TestAwardedCredit(CreditLayerTest):
 
         user_credits = self.testapp.get('%s?definitionType=%s&definitionUnits=%s' % (user_transcript_url, 'new_types', 'new_units'))
         user_credits = user_credits.json_body
-        assert_that(user_credits, has_entries('Total', is_(4),
+        assert_that(user_credits, has_entries('Total', is_(3),
                                               'Items', has_length(3),
                                               'ItemCount', is_(3)))
         assert_that([x['NTIID'] for x in user_credits['Items']],
@@ -200,7 +200,7 @@ class TestAwardedCredit(CreditLayerTest):
         # Sorting
         user_credits = self.testapp.get('%s?sortOn=awarded_date&sortOrder=ASCENDING' % user_transcript_url)
         user_credits = user_credits.json_body
-        assert_that(user_credits, has_entries('Total', is_(4),
+        assert_that(user_credits, has_entries('Total', is_(3),
                                               'Items', has_length(3),
                                               'ItemCount', is_(3)))
         assert_that([x['NTIID'] for x in user_credits['Items']],
@@ -208,7 +208,7 @@ class TestAwardedCredit(CreditLayerTest):
 
         user_credits = self.testapp.get('%s?sortOn=awarded_date&sortOrder=DESCENDING' % user_transcript_url)
         user_credits = user_credits.json_body
-        assert_that(user_credits, has_entries('Total', is_(4),
+        assert_that(user_credits, has_entries('Total', is_(3),
                                               'Items', has_length(3),
                                               'ItemCount', is_(3)))
         assert_that([x['NTIID'] for x in user_credits['Items']],
@@ -216,7 +216,7 @@ class TestAwardedCredit(CreditLayerTest):
 
         user_credits = self.testapp.get('%s?sortOn=credit_definition&sortOrder=ASCENDING' % user_transcript_url)
         user_credits = user_credits.json_body
-        assert_that(user_credits, has_entries('Total', is_(4),
+        assert_that(user_credits, has_entries('Total', is_(3),
                                               'Items', has_length(3),
                                               'ItemCount', is_(3)))
         assert_that([x['NTIID'] for x in user_credits['Items']],

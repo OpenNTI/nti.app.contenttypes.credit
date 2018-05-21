@@ -83,6 +83,10 @@ class TestCreditDefinitions(CreditLayerTest):
                       'credit_type': 'new_types',
                       'credit_units': 'new_units'}
 
+        other_credit_def = {'MimeType': CreditDefinition.mime_type,
+                            'credit_type': 'other_types',
+                            'credit_units': 'new_units'}
+
         res = self.testapp.put_json(credit_def_url, credit_def)
         res = res.json_body
         original_ntiid = res['NTIID']
@@ -144,3 +148,9 @@ class TestCreditDefinitions(CreditLayerTest):
         def_item = credit_items[0]
         assert_that(def_item['NTIID'], is_(original_ntiid))
         assert_that(def_item['deleted'], is_(False))
+
+        # Cannot edit to a dupe
+        res = self.testapp.put_json(credit_def_url, other_credit_def)
+        other_def_href = res.json_body.get('href')
+        self.testapp.put_json(other_def_href, {'credit_type': new_type,
+                                               'credit_units': new_units}, status=409)

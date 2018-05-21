@@ -189,6 +189,19 @@ class CreditDefinitionPutView(UGDPutView):
     Allow editing of a :class:`ICreditDefinition`.
     """
 
+    def __call__(self):
+        result = super(CreditDefinitionPutView, self).__call__()
+        definition_container = component.getUtility(ICreditDefinitionContainer)
+        for credit_definition in definition_container.values():
+            if      self.context is not credit_definition \
+                and self.context == credit_definition:
+                # Duplicate defs; raise a 409
+                raise_error({'message': _(u"A credit definition of this type already exists."),
+                             'code': 'DuplicateCreditDefinitionError'},
+                            factory=hexc.HTTPConflict)
+        return result
+
+
 @view_config(route_name='objects.generic.traversal',
              context=ICreditDefinition,
              request_method='DELETE',
