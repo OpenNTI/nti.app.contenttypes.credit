@@ -63,6 +63,11 @@
                 for="nti.contenttypes.credit.interfaces.ICreditDefinition
                      pyramid.interfaces.IRequest" />
 
+    <subscriber factory=".decorators._CompletedItemDecorator"
+                provides="nti.externalization.interfaces.IExternalMappingDecorator"
+                for="nti.contenttypes.completion.interfaces.ICompletedItem
+                     pyramid.interfaces.IRequest" />
+
     <!-- Externalization -->
     <include package="nti.wref" />
     <include package="nti.mimetype" />
