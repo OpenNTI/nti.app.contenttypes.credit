@@ -1,6 +1,6 @@
 import codecs
 from setuptools import setup
-from setuptools import find_packages 
+from setuptools import find_packages
 
 entry_points = {
     "z3c.autoinclude.plugin": [
@@ -51,6 +51,7 @@ setup(
     tests_require=TESTS_REQUIRE,
     install_requires=[
         'setuptools',
+        'nti.app.contenttypes.completion',
         'nti.contenttypes.credit',
         'nti.externalization',
         'nti.links',

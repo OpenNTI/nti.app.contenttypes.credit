@@ -57,7 +57,8 @@ class UserCreditTranscript(object):
 
     def iter_awarded_credits(self):
         awarded_credits = []
-        transcripts = component.subscribers((self.context,), ICreditTranscript)
+        transcripts = component.subscribers((self.context,),
+                                            ICreditTranscript)
         for transcript in transcripts:
             awarded_credits.extend(transcript.iter_awarded_credits())
         return awarded_credits

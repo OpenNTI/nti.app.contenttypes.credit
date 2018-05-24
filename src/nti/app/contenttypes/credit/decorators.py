@@ -15,9 +15,13 @@ from zope.location.interfaces import ILocation
 
 from nti.app.contenttypes.credit import USER_TRANSCRIPT_VIEW_NAME
 
+from nti.app.contenttypes.credit.interfaces import IUserAwardedCredit
+
 from nti.app.renderers.decorators import AbstractAuthenticatedRequestAwareDecorator
 
 from nti.appserver.pyramid_renderers_edit_link_decorator import EditLinkDecorator
+
+from nti.contenttypes.completion.interfaces import ICompletedItem
 
 from nti.contenttypes.credit.interfaces import ICreditDefinition
 from nti.contenttypes.credit.interfaces import ICreditTranscript
@@ -38,8 +42,6 @@ from nti.externalization.interfaces import IExternalMappingDecorator
 from nti.links.externalization import render_link
 
 from nti.links.links import Link
-
-from nti.app.contenttypes.credit.interfaces import IUserAwardedCredit
 
 LINKS = StandardExternalFields.LINKS
 
@@ -147,3 +149,25 @@ class _AdminCreditDefinitionLinkDecorator(AbstractAuthenticatedRequestAwareDecor
             link.__name__ = ''
             link.__parent__ = context
             _links.append(link)
+
+
+@component.adapter(ICompletedItem)
+@interface.implementer(IExternalMappingDecorator)
+class _CompletedItemDecorator(AbstractAuthenticatedRequestAwareDecorator):
+    """
+    A decorator that provides awarded credits for a completed item, if
+    applicable.
+    """
+
+    def _get_awarded_credits(self, completed_item):
+        user = IUser(completed_item.Principal, None)
+        item = completed_item.Item
+        transcript = component.queryMultiAdapter((user, item),
+                                                 ICreditTranscript)
+        if transcript is not None:
+            return tuple(transcript.iter_awarded_credits())
+
+    def _do_decorate_external(self, context, result):
+        awarded_credits = self._get_awarded_credits(context)
+        if awarded_credits:
+            result['awarded_credits'] = awarded_credits
