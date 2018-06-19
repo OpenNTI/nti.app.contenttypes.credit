@@ -24,4 +24,4 @@ logger = __import__('logging').getLogger(__name__)
 @interface.implementer(IInternalObjectUpdater)
 class _UserAwardedCreditUpdater(CreditDefinitionNormalizationUpdater):
 
-    iface_to_update = IUserAwardedCredit
+    _ext_iface_upper_bound = IUserAwardedCredit
