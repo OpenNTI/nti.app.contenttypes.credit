@@ -22,11 +22,15 @@ from nti.contenttypes.credit.interfaces import ICreditDefinitionContainer
 
 from nti.site.hostpolicy import get_all_host_sites
 
+from nti.site.interfaces import IHostPolicyFolder
+
 from nti.site.localutility import install_utility
+
+from nti.traversal.traversal import find_interface
 
 logger = __import__('logging').getLogger(__name__)
 
-generation = 2
+generation = 3
 
 
 class _CreditSchemaManager(SchemaManager):
@@ -53,13 +57,13 @@ def install_credit_definition_container(context):
         assert component.getSiteManager() == ds_folder.getSiteManager(), \
                "Hooks not installed?"
 
-        root_container = component.queryUtility(ICreditDefinitionContainer)
         for site in get_all_host_sites():
             with current_site(site):
                 site_name = site.__name__
                 site_registry = component.getSiteManager()
                 credit_def_container = component.queryUtility(ICreditDefinitionContainer)
-                if credit_def_container == root_container:
+                container_site = find_interface(credit_def_container, IHostPolicyFolder, strict=False)
+                if credit_def_container is None or container_site != site:
                     logger.info('Installed credit definition container (%s)',
                                 site_name)
                     install_utility(CreditDefinitionContainer(),
