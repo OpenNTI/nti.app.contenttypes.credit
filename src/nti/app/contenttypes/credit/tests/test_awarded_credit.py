@@ -7,35 +7,58 @@ from __future__ import absolute_import
 
 # pylint: disable=protected-access,too-many-public-methods
 
+import os
+import fudge
+
 from hamcrest import is_
 from hamcrest import is_not
 from hamcrest import contains
 from hamcrest import not_none
+from hamcrest import has_item
+from hamcrest import has_items
 from hamcrest import has_entry
 from hamcrest import has_length
 from hamcrest import assert_that
 from hamcrest import has_entries
+from hamcrest import has_properties
 from hamcrest import contains_inanyorder
 does_not = is_not
 
 from zope import component
+from zope import interface
+
+from zope.component.hooks import getSite
+
+from zope.securitypolicy.interfaces import IPrincipalRoleManager
 
 from nti.app.contenttypes.credit import USER_TRANSCRIPT_VIEW_NAME
+from nti.app.contenttypes.credit import CREDIT_PATH_NAME
 from nti.app.contenttypes.credit import CREDIT_DEFINITIONS_VIEW_NAME
 
 from nti.app.contenttypes.credit.credit import UserAwardedCredit
 
+from nti.app.contenttypes.credit.interfaces import IUserAwardedCreditTranscript
+
 from nti.app.contenttypes.credit.tests import CreditLayerTest
 
 from nti.app.testing.decorators import WithSharedApplicationMockDS
+
+from nti.base._compat import text_
+
+from nti.coremetadata.interfaces import IDeletedObjectPlaceholder
 
 from nti.contenttypes.credit.credit import CreditDefinition
 from nti.contenttypes.credit.credit import CreditDefinitionContainer
 
 from nti.contenttypes.credit.interfaces import ICreditDefinitionContainer
 
+from nti.dataserver.authorization import ROLE_SITE_ADMIN
+
+from nti.dataserver.users.common import set_user_creation_site
+
 from nti.dataserver.tests import mock_dataserver
 
+from nti.dataserver.users import User
 
 class TestAwardedCredit(CreditLayerTest):
     """
@@ -248,3 +271,220 @@ class TestAwardedCredit(CreditLayerTest):
         self.testapp.get(awarded_credit_href)
         self.testapp.delete(awarded_credit_href)
         self.testapp.get(awarded_credit_href, status=404)
+
+
+class TestBulkAwardedCreditView(CreditLayerTest):
+
+    admin_user = u"sjohnson@nextthought.com"
+
+    def setUp(self):
+        self.url = '/dataserver2/Credit/@@bulk_awarded_credit'
+        self.source_info = ('source', os.path.join(os.path.dirname(__file__), 'resources/bulk_awarded_credit.csv'))
+
+        self.container = CreditDefinitionContainer()
+        component.getGlobalSiteManager().registerUtility(self.container,
+                                                         ICreditDefinitionContainer)
+
+    def tearDown(self):
+        component.getGlobalSiteManager().unregisterUtility(self.container,
+                                                           ICreditDefinitionContainer)
+
+    def _f(self, file_info, content=None):
+        return file_info if content is None else (file_info[0], file_info[1], str(content))
+
+    def _upload_file(self, file_info, content=None, status=200, username=u'sjohnson@nextthought.com'):
+        return self.testapp.post(self.url,
+                                 upload_files=(self._f(file_info, content),),
+                                 status=status,
+                                 extra_environ=self._make_extra_environ(username=username))
+
+    def _make_csv_content(self, header='username,title,description,issuer,date,value,type,units', rows=[]):
+        data = []
+        if header is not None:
+            data.append(header)
+        data.extend(rows)
+        return '\n'.join(data)
+
+    @WithSharedApplicationMockDS(testapp=True, users=True)
+    def test_credit_definition_container_required(self):
+        self.testapp.post(self.url, upload_files=(), status=200, extra_environ=self._make_extra_environ(username=self.admin_user))
+        component.getGlobalSiteManager().unregisterUtility(self.container, ICreditDefinitionContainer)
+        result = self.testapp.post(self.url, upload_files=(), status=422, extra_environ=self._make_extra_environ(username=self.admin_user)).json_body
+        assert_that(result, has_entries({'message': 'Credit definition container not setup for site.'}))
+
+    @WithSharedApplicationMockDS(testapp=True, users=True)
+    @fudge.patch('nti.app.users.utils.admin.SiteAdminUtility.can_administer_user')
+    def test_bulk_awarded_credit(self, mock_can_administer):
+        """
+        Test bulk create awarded credit to users. only nt and site admin could access.
+        """
+        mock_can_administer.is_callable().returns(False)
+
+        with mock_dataserver.mock_db_trans(self.ds):
+            for username in (u'user001', u'user002', u'user003'):
+                self._create_user(username)
+
+        # No source file uploaded.
+        result = self.testapp.post(self.url, upload_files=(), status=200, extra_environ=self._make_extra_environ(username=self.admin_user)).json_body
+        assert_that(result, has_entries({'Warnings': contains('No CSV source found.'),
+                                         'Items': has_length(0)}))
+
+        # bad csv formater: no content.
+        result = self._upload_file(self.source_info, content='', status=422).json_body
+        assert_that(result, has_entries({'code': 'InvalidCSVFileCodeError',
+                                         'message': 'Could not parse csv file, csv delimiters should be tab or comma.'}))
+
+        # bad csv formater: mixed delimiters.
+        content = self._make_csv_content(rows=['\t'.join(['user001', 'Math', 'gift', 'nextthought', '2018-09-20T00', '100', 'Course', 'points'])])
+        result = self._upload_file(self.source_info, content=content, status=422).json_body
+        assert_that(result, has_entries({'code': 'InvalidCSVFileCodeError',
+                                         'message': 'Could not parse csv file, csv delimiters should be tab or comma.'}))
+
+        # required columns is missing.
+        content = self._make_csv_content(header='title,description,issuer,date,value,type,units')
+        result = self._upload_file(self.source_info, content=content, status=422).json_body
+        assert_that(result, has_entries({'code': 'InvalidCSVFileCodeError',
+                                         'message': 'Could not parse csv file, missing required columns: username.'}))
+
+        content = self._make_csv_content(header='description,unknown')
+        result = self._upload_file(self.source_info, content=content, status=422).json_body
+        assert_that(result, has_entries({'code': 'InvalidCSVFileCodeError',
+                                         'message': 'Could not parse csv file, missing required columns: username, title, value, date, units, type.'}))
+
+        # invalid data, missing value for required columns
+        content = self._make_csv_content(rows=[', , , , , , ,'])
+        result = self._upload_file(self.source_info, content=content, status=422).json_body
+        assert_that(result, has_entries({'code': 'InvalidRowsError',
+                                         'message': 'Failed to grant credits to all users within the csv file.',
+                                         'InvalidRows': has_length(1)}))
+        assert_that(result['InvalidRows'][0], has_entries({'RowNumber': 1,
+                                                           'username': 'No user (username=) found, please provide an existing username.',
+                                                           'credit_definition': 'No credit definition (type=, units=) found.',
+                                                           'title': 'Please use at least 2 characters.',
+                                                           'date': 'Please use an iso8601 format date.',
+                                                           'value': 'Please use a number not less than 0.1.'}))
+
+        # invalid data, non-existing user, bad title, bad date format, non-existing credit_definition
+        content = self._make_csv_content(rows=['non-user, d, , , 2018-09-20, xyz, Grade,points'])
+        result = self._upload_file(self.source_info, content=content, status=422).json_body
+        assert_that(result, has_entries({'code': 'InvalidRowsError',
+                                         'message': 'Failed to grant credits to all users within the csv file.',
+                                         'InvalidRows': has_length(1)}))
+        assert_that(result['InvalidRows'][0], has_entries({'RowNumber': 1,
+                                                           'username': 'No user (username=non-user) found, please provide an existing username.',
+                                                           'credit_definition': 'No credit definition (type=Grade, units=points) found.',
+                                                           'title': 'Please use at least 2 characters.',
+                                                           'date': 'Please use an iso8601 format date.',
+                                                           'value': 'Please use a number not less than 0.1.'}))
+
+        # add credit_definition
+        with mock_dataserver.mock_db_trans(self.ds):
+            mock_dataserver.current_transaction.add(self.container)
+            self.container.add_credit_definition(CreditDefinition(credit_type=u'grade', credit_units=u'points'))
+            self.container.add_credit_definition(CreditDefinition(credit_type=u'sport', credit_units=u'rewards'))
+            self.container.add_credit_definition(CreditDefinition(credit_type=u'sport', credit_units=u'scores'))
+            self.container.add_credit_definition(CreditDefinition(credit_type=text_('成绩'), credit_units=text_('分')))
+
+            deleted_credit_def = self.container.add_credit_definition(CreditDefinition(credit_type=u'match', credit_units=u'inches'))
+            interface.alsoProvides(deleted_credit_def, IDeletedObjectPlaceholder)
+            assert_that(self.container.get_credit_definition_by('match', 'inches'))
+
+        # invalid data, both rows are invalid
+        content = self._make_csv_content(rows=['user001, d, , , 2018-09-20T00, 52, Grade,points',
+                                               'user001, dd, , , 2018-09-20T00, xx, Grade,points',
+                                               'user001, dd, , , 2018-09-02T00, 52, match, inches'])
+        result = self._upload_file(self.source_info, content=content, status=422).json_body
+        assert_that(result, has_entries({'code': 'InvalidRowsError',
+                                         'message': 'Failed to grant credits to all users within the csv file.',
+                                         'InvalidRows': has_length(3)}))
+        assert_that(result['InvalidRows'], has_items(has_entries({'RowNumber': 1, 'title': 'Please use at least 2 characters.'}),
+                                                     has_entries({'RowNumber': 2, 'value': 'Please use a number not less than 0.1.'}),
+                                                     has_entries({'RowNumber': 3, 'credit_definition': 'No credit definition (type=match, units=inches) found.'})))
+
+        with mock_dataserver.mock_db_trans(self.ds):
+            interface.noLongerProvides(deleted_credit_def, IDeletedObjectPlaceholder)
+
+        # any invalid row would cause error.
+        content = self._make_csv_content(rows=['user001, d, , , 2018-09-20T00, 52, inches,inches',
+                                               'user001, dd, , , 2018-09-20T00, 52, match,inches'])
+        result = self._upload_file(self.source_info, content=content, status=422).json_body
+        assert_that(result, has_entries({'code': 'InvalidRowsError',
+                                         'message': 'Failed to grant credits to all users within the csv file.',
+                                         'InvalidRows': has_length(1)}))
+        assert_that(result['InvalidRows'], has_items(has_entries({'RowNumber': 1, 'title': 'Please use at least 2 characters.'})))
+
+        # all rows are valid
+        result = self._upload_file(self.source_info, status=200).json_body
+        assert_that(result, has_entries({'Items': has_length(5), 'Warnings': None}))
+        assert_that(result['Items'][0], has_entries({'MimeType': 'application/vnd.nextthought.credit.userawardedcredit',
+                                                     'title': 'Math',
+                                                     'description': 'final test',
+                                                     'issuer': 'MathClass',
+                                                     'awarded_date': '2018-10-29T00:00:00Z',
+                                                     'amount': 100,
+                                                     'credit_definition': has_entries({'MimeType': u'application/vnd.nextthought.credit.creditdefinition',
+                                                                                       'credit_type': 'grade',
+                                                                                       'credit_units': 'points'})})
+                                                )
+        with mock_dataserver.mock_db_trans(self.ds):
+            transcript = IUserAwardedCreditTranscript(User.get_user('user001'))
+            credits = sorted([x for x in transcript.iter_awarded_credits()], key=lambda x: x.amount)
+            assert_that(credits, has_length(3))
+            assert_that(credits[0], has_properties({'title': 'English',
+                                                    'amount': 50,
+                                                    'credit_definition': has_properties({'credit_type': 'sport', 'credit_units': 'rewards'})}))
+            assert_that(credits[1], has_properties({'title': text_('夏令营'),
+                                                    'description': text_('数学竞赛'),
+                                                    'issuer': text_('美国'),
+                                                    'amount': 90,
+                                                    'credit_definition': has_properties({'credit_type': text_('成绩'), 'credit_units': text_('分')})}))
+            assert_that(credits[2], has_properties({'title': 'Math',
+                                                    'amount': 100,
+                                                    'credit_definition': has_properties({'credit_type': 'grade', 'credit_units': 'points'})}))
+
+            transcript = IUserAwardedCreditTranscript(User.get_user('user002'))
+            credits = [x for x in transcript.iter_awarded_credits()]
+            assert_that(credits, has_length(1))
+            assert_that(credits[0], has_properties({'title': 'Tennis',
+                                                    'amount': 20,
+                                                    'credit_definition': has_properties({'credit_type': 'sport', 'credit_units': 'rewards'})}))
+
+            transcript = IUserAwardedCreditTranscript(User.get_user('user003'))
+            credits = [x for x in transcript.iter_awarded_credits()]
+            assert_that(credits, has_length(1))
+            assert_that(credits[0], has_properties({'title': 'Golf',
+                                                    'amount': 0.1,
+                                                    'credit_definition': has_properties({'credit_type': 'sport', 'credit_units': 'scores'})}))
+
+        # authentication, only nextthought and site admins could access this view.
+        mock_can_administer.is_callable().returns(True)
+
+        self.testapp.post(self.url, upload_files=(), status=401, extra_environ=self._make_extra_environ(username=None))
+        self.testapp.post(self.url, upload_files=(), status=403, extra_environ=self._make_extra_environ(username=u'user001'))
+
+        with mock_dataserver.mock_db_trans(self.ds):
+            srm = IPrincipalRoleManager(getSite(), None)
+            srm.assignRoleToPrincipal(ROLE_SITE_ADMIN.id, 'user001')
+
+        result = self._upload_file(self.source_info, status=200, username=u'user001').json_body
+        assert_that(result, has_entries({'Items': has_length(5), 'Warnings': None}))
+
+        with mock_dataserver.mock_db_trans(self.ds):
+            srm = IPrincipalRoleManager(getSite(), None)
+            srm.removeRoleFromPrincipal(ROLE_SITE_ADMIN.id, 'user001')
+
+    @WithSharedApplicationMockDS(testapp=True, users=True)
+    def test_credit_collection(self):
+        result = self.testapp.get('/dataserver2/service/').json_body['Items']
+        global_ws = None
+        credit_collection = None
+        try:
+            global_ws = next(x for x in result if x['Title'] == 'Global')
+            credit_collection = next(x for x in global_ws['Items'] if x['Title'] == CREDIT_PATH_NAME)
+        except StopIteration:
+            pass
+        assert_that(global_ws, not_none())
+        assert_that(credit_collection, not_none())
+
+        link = self.require_link_href_with_rel(credit_collection, 'bulk_awarded_credit')
+        assert_that(link, is_("/dataserver2/Credit/@@bulk_awarded_credit"))
