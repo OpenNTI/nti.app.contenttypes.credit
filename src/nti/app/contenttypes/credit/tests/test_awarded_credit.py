@@ -12,6 +12,8 @@ import fudge
 
 from hamcrest import is_
 from hamcrest import is_not
+from hamcrest import calling
+from hamcrest import raises
 from hamcrest import contains
 from hamcrest import not_none
 from hamcrest import has_item
@@ -40,6 +42,8 @@ from nti.app.contenttypes.credit.credit import UserAwardedCredit
 from nti.app.contenttypes.credit.interfaces import IUserAwardedCreditTranscript
 
 from nti.app.contenttypes.credit.tests import CreditLayerTest
+
+from nti.app.contenttypes.credit.views import UserAwardedCreditBulkCreationView
 
 from nti.app.testing.decorators import WithSharedApplicationMockDS
 
@@ -304,6 +308,32 @@ class TestBulkAwardedCreditView(CreditLayerTest):
             data.append(header)
         data.extend(rows)
         return '\n'.join(data)
+
+    @WithSharedApplicationMockDS(testapp=True, users=True)
+    @fudge.patch('nti.appserver.timezone.DisplayableTimeProvider.get_timezone_display_name')
+    def test_adjust_date_time(self, mock_timezone):
+        with mock_dataserver.mock_db_trans(self.ds):
+            user = self._create_user(u'user001')
+
+            view = UserAwardedCreditBulkCreationView(self.request)
+            view.remoteUser = None
+            mock_timezone.is_callable().returns('US/Central')
+            assert_that(view._adjust_date_time("2018-09-20T00:00:00Z").strftime("%Y-%m-%d %H:%M:%S"), is_("2018-09-20 00:00:00"))
+            assert_that(view._adjust_date_time("2018-09-20T00:00:00").strftime("%Y-%m-%d %H:%M:%S"), is_("2018-09-20 00:00:00"))
+
+            view = UserAwardedCreditBulkCreationView(self.request)
+            view.remoteUser = user
+            mock_timezone.is_callable().returns('US/Central')
+            assert_that(view._adjust_date_time("2018-09-20T00:00:00Z").strftime("%Y-%m-%d %H:%M:%S"), is_("2018-09-20 00:00:00"))
+            assert_that(view._adjust_date_time("2018-09-20T00:00:00").strftime("%Y-%m-%d %H:%M:%S"), is_("2018-09-20 05:00:00"))
+
+            view = UserAwardedCreditBulkCreationView(self.request)
+            view.remoteUser = user
+            mock_timezone.is_callable().returns(None)
+            assert_that(view._adjust_date_time("2018-09-20T00:00:00Z").strftime("%Y-%m-%d %H:%M:%S"), is_("2018-09-20 00:00:00"))
+            assert_that(view._adjust_date_time("2018-09-20T00:00:00").strftime("%Y-%m-%d %H:%M:%S"), is_("2018-09-20 00:00:00"))
+
+            assert_that(calling(view._adjust_date_time).with_args("2018-09-20"), raises(Exception))
 
     @WithSharedApplicationMockDS(testapp=True, users=True)
     def test_credit_definition_container_required(self):
