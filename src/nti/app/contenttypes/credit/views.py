@@ -29,6 +29,8 @@ from zope.container.contained import Contained
 
 from zope.traversing.interfaces import IPathAdapter
 
+from zope.i18n import translate
+
 from nti.app.base.abstract_views import AbstractAuthenticatedView
 from nti.app.base.abstract_views import get_source
 
@@ -546,7 +548,7 @@ class UserAwardedCreditBulkCreationView(AbstractAuthenticatedView,
             external[attr] = row[key]
         return external
 
-    def parse_csv(self, warnings, invalid_rows):
+    def parse_csv(self, invalid_rows):
         result = []
 
         source = get_source(self.request, 'csv', 'input', 'source')
@@ -556,12 +558,13 @@ class UserAwardedCreditBulkCreationView(AbstractAuthenticatedView,
                 source.seek(0)
                 reader = csv.DictReader(source, dialect=dialect)
             except:
-                raise ValueError("csv delimiters should be tab or comma.")
+                raise ValueError(_(u"Please use tab or comma as csv delimiters."))
 
             # check if csv file does include all required columns.
             missing_columns = set(self._required_columns) - set(reader.fieldnames)
             if missing_columns:
-                raise ValueError("missing required columns: %s." % ', '.join(missing_columns))
+                msg = translate(_(u"Please provide missing columns: ${val}.", mapping={'val': ', '.join(missing_columns)}))
+                raise ValueError(msg)
 
             # normalize
             rows = []
@@ -577,16 +580,18 @@ class UserAwardedCreditBulkCreationView(AbstractAuthenticatedView,
                 # username
                 user = User.get_user(row['username']) if row['username'] else None
                 if user is None:
-                    invalid_row['username'] = u'No user (username=%s) found, please provide an existing username.' % row['username']
+                    invalid_row['username'] = translate(_(u'No user (username=${username}) found.', mapping={'username': row['username']}))
                 elif not self._can_administer(user):
-                    invalid_row['username'] = u'%s can not grant credit for %s.' % (self.remoteUser.username, user.username)
+                    invalid_row['username'] = translate(_(u'${remoteUser} can not grant credit for ${username}.', mapping={'remoteUser': self.remoteUser.username,
+                                                                                                                           'username': username}))
                 else:
                     row['user'] = user
 
                 # type and units
                 definition = None if not row['type'] or not row['units'] else self._find_credit_definition(credit_type=row['type'], credit_units=row['units'])
                 if definition is None:
-                    invalid_row['credit_definition'] = u'No credit definition (type=%s, units=%s) found.' % (row['type'], row['units'])
+                    invalid_row['credit_definition'] = translate(_(u'No credit definition (type=${type}, units=${units}) found.', mapping={'type': row['type'],
+                                                                                                                                           'units': row['units']}))
                 else:
                     row['credit_definition'] = definition
 
@@ -594,19 +599,20 @@ class UserAwardedCreditBulkCreationView(AbstractAuthenticatedView,
                 try:
                     row['date'] = self._adjust_date_time(row['date'])
                 except:
-                    invalid_row['date'] = u'Please use an iso8601 format date.'
+                    invalid_row['date'] = _(u'Please use an iso8601 format date.')
 
                 # title
                 if len(row['title']) < 2:
-                    invalid_row['title'] = u"Please use at least 2 characters."
+                    invalid_row['title'] = _(u"Please use at least 2 characters.")
 
                 # value
                 try:
                     row['value'] = float(row['value'])
+                except ValueError:
+                    invalid_row['value'] = _(u'Please provide a number.')
+                else:
                     if row['value'] < IUserAwardedCredit['amount'].min:
-                        raise
-                except:
-                    invalid_row['value'] = u'Please use a number not less than %s.' % IUserAwardedCredit['amount'].min
+                        invalid_row['value'] = translate(_(u'Please use a number no less than ${value}.', mapping={'value': IUserAwardedCredit['amount'].min}))
 
                 if invalid_row:
                     invalid_row['RowNumber'] = idx + 1
@@ -624,7 +630,14 @@ class UserAwardedCreditBulkCreationView(AbstractAuthenticatedView,
                     result.append(new_awarded_credit)
                     logger.info('Granted credit to user (%s) (remote_user=%s)', user, self.remoteUser)
         else:
-            warnings.append(_(u"No CSV source found."))
+            raise_json_error(
+                self.request,
+                hexc.HTTPUnprocessableEntity,
+                {
+                    'message': _(u'No csv source file found.'),
+                    'code': 'MissingCSVFileError'
+                },
+                None)
         return result
 
     def __call__(self):
@@ -639,19 +652,18 @@ class UserAwardedCreditBulkCreationView(AbstractAuthenticatedView,
                 },
                 None)
 
-        warnings = list()
         invalid_rows = list()
 
         try:
-            items = self.parse_csv(warnings, invalid_rows)
+            items = self.parse_csv(invalid_rows)
         except ValueError as e:
             logger.exception('Failed to parse csv file')
             raise_json_error(
                 self.request,
                 hexc.HTTPUnprocessableEntity,
                 {
-                    'message': 'Could not parse csv file, %s' % str(e),
-                    'code': 'InvalidCSVFileCodeError',
+                    'message': str(e),
+                    'code': 'InvalidCSVFileCodeError'
                 },
                 None)
 
@@ -662,7 +674,7 @@ class UserAwardedCreditBulkCreationView(AbstractAuthenticatedView,
                 hexc.HTTPUnprocessableEntity,
                 {
                     'code': 'InvalidRowsError',
-                    'message': 'Failed to grant credits to all users within the csv file.',
+                    'message': _(u'Failed to grant credits to all users within the csv file.'),
                     'InvalidRows': invalid_rows
                 },
                 None)
@@ -670,5 +682,4 @@ class UserAwardedCreditBulkCreationView(AbstractAuthenticatedView,
         result = LocatedExternalDict()
         result[ITEMS] = items
         result[ITEM_COUNT] = result[TOTAL] = len(items)
-        result['Warnings'] = warnings if warnings else None
         return result

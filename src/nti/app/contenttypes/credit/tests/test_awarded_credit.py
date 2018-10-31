@@ -337,9 +337,12 @@ class TestBulkAwardedCreditView(CreditLayerTest):
 
     @WithSharedApplicationMockDS(testapp=True, users=True)
     def test_credit_definition_container_required(self):
-        self.testapp.post(self.url, upload_files=(), status=200, extra_environ=self._make_extra_environ(username=self.admin_user))
+        content = self._make_csv_content()
+        self._upload_file(self.source_info, content=content, status=200)
+
         component.getGlobalSiteManager().unregisterUtility(self.container, ICreditDefinitionContainer)
-        result = self.testapp.post(self.url, upload_files=(), status=422, extra_environ=self._make_extra_environ(username=self.admin_user)).json_body
+
+        result = self._upload_file(self.source_info, content=content, status=422).json_body
         assert_that(result, has_entries({'message': 'Credit definition container not setup for site.'}))
 
     @WithSharedApplicationMockDS(testapp=True, users=True)
@@ -355,31 +358,31 @@ class TestBulkAwardedCreditView(CreditLayerTest):
                 self._create_user(username)
 
         # No source file uploaded.
-        result = self.testapp.post(self.url, upload_files=(), status=200, extra_environ=self._make_extra_environ(username=self.admin_user)).json_body
-        assert_that(result, has_entries({'Warnings': contains('No CSV source found.'),
-                                         'Items': has_length(0)}))
+        result = self.testapp.post(self.url, upload_files=(), status=422, extra_environ=self._make_extra_environ(username=self.admin_user)).json_body
+        assert_that(result, has_entries({"code": "MissingCSVFileError",
+                                         "message": "No csv source file found."}))
 
         # bad csv formater: no content.
         result = self._upload_file(self.source_info, content='', status=422).json_body
         assert_that(result, has_entries({'code': 'InvalidCSVFileCodeError',
-                                         'message': 'Could not parse csv file, csv delimiters should be tab or comma.'}))
+                                         'message': 'Please use tab or comma as csv delimiters.'}))
 
         # bad csv formater: mixed delimiters.
         content = self._make_csv_content(rows=['\t'.join(['user001', 'Math', 'gift', 'nextthought', '2018-09-20T00', '100', 'Course', 'points'])])
         result = self._upload_file(self.source_info, content=content, status=422).json_body
         assert_that(result, has_entries({'code': 'InvalidCSVFileCodeError',
-                                         'message': 'Could not parse csv file, csv delimiters should be tab or comma.'}))
+                                         'message': 'Please use tab or comma as csv delimiters.'}))
 
         # required columns is missing.
         content = self._make_csv_content(header='title,description,issuer,date,value,type,units')
         result = self._upload_file(self.source_info, content=content, status=422).json_body
         assert_that(result, has_entries({'code': 'InvalidCSVFileCodeError',
-                                         'message': 'Could not parse csv file, missing required columns: username.'}))
+                                         'message': 'Please provide missing columns: username.'}))
 
         content = self._make_csv_content(header='description,unknown')
         result = self._upload_file(self.source_info, content=content, status=422).json_body
         assert_that(result, has_entries({'code': 'InvalidCSVFileCodeError',
-                                         'message': 'Could not parse csv file, missing required columns: username, title, value, date, units, type.'}))
+                                         'message': 'Please provide missing columns: username, title, value, date, units, type.'}))
 
         # invalid data, missing value for required columns
         content = self._make_csv_content(rows=[', , , , , , ,'])
@@ -388,11 +391,11 @@ class TestBulkAwardedCreditView(CreditLayerTest):
                                          'message': 'Failed to grant credits to all users within the csv file.',
                                          'InvalidRows': has_length(1)}))
         assert_that(result['InvalidRows'][0], has_entries({'RowNumber': 1,
-                                                           'username': 'No user (username=) found, please provide an existing username.',
+                                                           'username': 'No user (username=) found.',
                                                            'credit_definition': 'No credit definition (type=, units=) found.',
                                                            'title': 'Please use at least 2 characters.',
                                                            'date': 'Please use an iso8601 format date.',
-                                                           'value': 'Please use a number not less than 0.1.'}))
+                                                           'value': 'Please provide a number.'}))
 
         # invalid data, non-existing user, bad title, bad date format, non-existing credit_definition
         content = self._make_csv_content(rows=['non-user, d, , , 2018-09-20, xyz, Grade,points'])
@@ -401,11 +404,11 @@ class TestBulkAwardedCreditView(CreditLayerTest):
                                          'message': 'Failed to grant credits to all users within the csv file.',
                                          'InvalidRows': has_length(1)}))
         assert_that(result['InvalidRows'][0], has_entries({'RowNumber': 1,
-                                                           'username': 'No user (username=non-user) found, please provide an existing username.',
+                                                           'username': 'No user (username=non-user) found.',
                                                            'credit_definition': 'No credit definition (type=Grade, units=points) found.',
                                                            'title': 'Please use at least 2 characters.',
                                                            'date': 'Please use an iso8601 format date.',
-                                                           'value': 'Please use a number not less than 0.1.'}))
+                                                           'value': 'Please provide a number.'}))
 
         # add credit_definition
         with mock_dataserver.mock_db_trans(self.ds):
@@ -421,14 +424,14 @@ class TestBulkAwardedCreditView(CreditLayerTest):
 
         # invalid data, both rows are invalid
         content = self._make_csv_content(rows=['user001, d, , , 2018-09-20T00, 52, Grade,points',
-                                               'user001, dd, , , 2018-09-20T00, xx, Grade,points',
+                                               'user001, dd, , , 2018-09-20T00, 0, Grade,points',
                                                'user001, dd, , , 2018-09-02T00, 52, match, inches'])
         result = self._upload_file(self.source_info, content=content, status=422).json_body
         assert_that(result, has_entries({'code': 'InvalidRowsError',
                                          'message': 'Failed to grant credits to all users within the csv file.',
                                          'InvalidRows': has_length(3)}))
         assert_that(result['InvalidRows'], has_items(has_entries({'RowNumber': 1, 'title': 'Please use at least 2 characters.'}),
-                                                     has_entries({'RowNumber': 2, 'value': 'Please use a number not less than 0.1.'}),
+                                                     has_entries({'RowNumber': 2, 'value': 'Please use a number no less than 0.1.'}),
                                                      has_entries({'RowNumber': 3, 'credit_definition': 'No credit definition (type=match, units=inches) found.'})))
 
         with mock_dataserver.mock_db_trans(self.ds):
@@ -445,7 +448,7 @@ class TestBulkAwardedCreditView(CreditLayerTest):
 
         # all rows are valid
         result = self._upload_file(self.source_info, status=200).json_body
-        assert_that(result, has_entries({'Items': has_length(5), 'Warnings': None}))
+        assert_that(result, has_entries({'Items': has_length(5)}))
         assert_that(result['Items'][0], has_entries({'MimeType': 'application/vnd.nextthought.credit.userawardedcredit',
                                                      'title': 'Math',
                                                      'description': 'final test',
@@ -497,7 +500,7 @@ class TestBulkAwardedCreditView(CreditLayerTest):
             srm.assignRoleToPrincipal(ROLE_SITE_ADMIN.id, 'user001')
 
         result = self._upload_file(self.source_info, status=200, username=u'user001').json_body
-        assert_that(result, has_entries({'Items': has_length(5), 'Warnings': None}))
+        assert_that(result, has_entries({'Items': has_length(5)}))
 
         with mock_dataserver.mock_db_trans(self.ds):
             srm = IPrincipalRoleManager(getSite(), None)
