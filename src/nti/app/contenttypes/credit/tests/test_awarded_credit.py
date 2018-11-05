@@ -459,6 +459,7 @@ class TestBulkAwardedCreditView(CreditLayerTest):
                                                                                        'credit_type': 'grade',
                                                                                        'credit_units': 'points'})})
                                                 )
+
         with mock_dataserver.mock_db_trans(self.ds):
             transcript = IUserAwardedCreditTranscript(User.get_user('user001'))
             credits = sorted([x for x in transcript.iter_awarded_credits()], key=lambda x: x.amount)
@@ -488,6 +489,16 @@ class TestBulkAwardedCreditView(CreditLayerTest):
             assert_that(credits[0], has_properties({'title': 'Golf',
                                                     'amount': 0.1,
                                                     'credit_definition': has_properties({'credit_type': 'sport', 'credit_units': 'scores'})}))
+
+        # only contains required columns
+        content = self._make_csv_content(header='username,title,date,value,type,units',
+                                         rows=['user002, "math", 2018-09-20T00, 52, Grade,points'])
+        result = self._upload_file(self.source_info, content=content, status=200).json_body
+        assert_that(result['Items'][0], has_entries({'title': 'math',
+                                                     'issuer': None,
+                                                     'description': None,
+                                                     'amount': 52,
+                                                     'MimeType': 'application/vnd.nextthought.credit.userawardedcredit'}))
 
         # authentication, only nextthought and site admins could access this view.
         mock_can_administer.is_callable().returns(True)

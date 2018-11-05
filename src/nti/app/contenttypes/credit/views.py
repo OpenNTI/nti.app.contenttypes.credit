@@ -545,7 +545,9 @@ class UserAwardedCreditBulkCreationView(AbstractAuthenticatedView,
             'MimeType': 'application/vnd.nextthought.credit.userawardedcredit'
         }
         for attr, key in self._attrs_columns_map.items():
-            external[attr] = row[key]
+            # for optional columns, do not set it if it's empty.
+            if key in row and row[key] != '':
+                external[attr] = row[key]
         return external
 
     def parse_csv(self, invalid_rows):
