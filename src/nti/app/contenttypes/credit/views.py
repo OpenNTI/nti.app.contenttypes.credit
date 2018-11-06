@@ -8,6 +8,8 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import absolute_import
 
+import csv
+
 from datetime import datetime
 
 from pyramid import httpexceptions as hexc
@@ -27,13 +29,17 @@ from zope.container.contained import Contained
 
 from zope.traversing.interfaces import IPathAdapter
 
+from zope.i18n import translate
+
 from nti.app.base.abstract_views import AbstractAuthenticatedView
+from nti.app.base.abstract_views import get_source
 
 from nti.app.contenttypes.credit import MessageFactory as _
 
 from nti.app.contenttypes.credit import CREDIT_PATH_NAME
 from nti.app.contenttypes.credit import USER_TRANSCRIPT_VIEW_NAME
 from nti.app.contenttypes.credit import CREDIT_DEFINITIONS_VIEW_NAME
+from nti.app.contenttypes.credit import BULK_AWARDED_CREDITS_VIEW_NAME
 
 from nti.app.contenttypes.credit.interfaces import IUserAwardedCredit
 from nti.app.contenttypes.credit.interfaces import IUserAwardedCreditTranscript
@@ -45,6 +51,10 @@ from nti.app.externalization.view_mixins import ModeledContentUploadRequestUtils
 
 from nti.appserver.ugd_edit_views import UGDPutView
 from nti.appserver.ugd_edit_views import UGDDeleteView
+
+from nti.appserver.interfaces import IDisplayableTimeProvider
+
+from nti.base._compat import text_
 
 from nti.common.string import is_true
 
@@ -63,6 +73,10 @@ from nti.dataserver.authorization import is_admin_or_content_admin_or_site_admin
 
 from nti.dataserver.interfaces import ISiteAdminUtility
 from nti.dataserver.interfaces import IDataserverFolder
+
+from nti.dataserver.users import User
+
+from nti.externalization.datetime import datetime_from_string
 
 from nti.externalization.interfaces import LocatedExternalDict
 from nti.externalization.interfaces import StandardExternalFields
@@ -445,3 +459,229 @@ class UserAwardedCreditDeleteView(UGDDeleteView,
     def __call__(self):
         self.check_access()
         return super(UserAwardedCreditDeleteView, self).__call__()
+
+
+@view_config(route_name='objects.generic.traversal',
+             name=BULK_AWARDED_CREDITS_VIEW_NAME,
+             context=CreditPathAdapter,
+             request_method='POST',
+             renderer='rest')
+class UserAwardedCreditBulkCreationView(AbstractAuthenticatedView,
+                                        ModeledContentUploadRequestUtilsMixin):
+
+    _required_columns = ('username', 'title', 'date', 'value', 'type', 'units')
+
+    _attrs_columns_map = {
+        'title': 'title',
+        'description': 'description',
+        'credit_definition': 'credit_definition',
+        'amount': 'value',
+        'awarded_date': 'date',
+        'issuer': 'issuer'
+    }
+
+    def __init__(self, request):
+        super(UserAwardedCreditBulkCreationView, self).__init__(request)
+        self._credit_definition_cache = {}
+
+    @Lazy
+    def _is_admin(self):
+        return is_admin(self.remoteUser)
+
+    @Lazy
+    def _is_site_admin(self):
+        return is_site_admin(self.remoteUser)
+
+    @Lazy
+    def _site_admin_utility(self):
+        return component.getUtility(ISiteAdminUtility)
+
+    @Lazy
+    def _definition_container(self):
+        return component.queryUtility(ICreditDefinitionContainer)
+
+    @Lazy
+    def _local_tzname(self):
+        timezone_util = component.queryMultiAdapter((self.remoteUser, self.request), IDisplayableTimeProvider)
+        if timezone_util:
+            return timezone_util.get_timezone_display_name()
+        return None
+
+    def _adjust_date_time(self, strDate):
+        """
+        If strDate doesn't include timezone information,
+        then we would expect it's UTC unless the request header/cookie exists a local timezone.
+        """
+        if self._local_tzname:
+            return datetime_from_string(strDate, assume_local=True, local_tzname=self._local_tzname)
+        return datetime_from_string(strDate)
+
+    def _can_administer(self, user):
+        if self._is_admin:
+            return True
+        elif self._is_site_admin:
+            return self._site_admin_utility.can_administer_user(self.remoteUser, user)
+        return False
+
+    def check_access(self):
+        if not self._is_admin and not self._is_site_admin:
+            raise hexc.HTTPForbidden(_('Must be an admin to award credit'))
+
+    def _find_credit_definition(self, credit_type, credit_units):
+        key = (credit_type.lower(), credit_units.lower())
+        if key in self._credit_definition_cache:
+            return self._credit_definition_cache[key]
+
+        definition = self._definition_container.get_credit_definition_by(credit_type=credit_type,
+                                                                         credit_units=credit_units)
+        if IDeletedObjectPlaceholder.providedBy(definition):
+            definition = None
+
+        self._credit_definition_cache[key] = definition
+        return definition
+
+    def _make_external_value(self, row):
+        external = {
+            'MimeType': 'application/vnd.nextthought.credit.userawardedcredit'
+        }
+        for attr, key in self._attrs_columns_map.items():
+            # for optional columns, do not set it if it's empty.
+            if key in row and row[key] != '':
+                external[attr] = row[key]
+        return external
+
+    def parse_csv(self, invalid_rows):
+        result = []
+
+        source = get_source(self.request, 'csv', 'input', 'source')
+        if source is not None:
+            try:
+                dialect = csv.Sniffer().sniff(source.read(), delimiters=(str('\t'), ','))
+                source.seek(0)
+                reader = csv.DictReader(source, dialect=dialect)
+            except:
+                raise ValueError(_(u"Please use tab or comma as csv delimiters."))
+
+            # check if csv file does include all required columns.
+            missing_columns = set(self._required_columns) - set(reader.fieldnames)
+            if missing_columns:
+                msg = translate(_(u"Please provide missing columns: ${val}.", mapping={'val': ', '.join(missing_columns)}))
+                raise ValueError(msg)
+
+            # normalize
+            rows = []
+            for x in reader:
+                for k,v in x.items():
+                    x[k] = text_(v.strip())
+                rows.append(x)
+
+            # do fields validation
+            for idx, row in enumerate(rows):
+                invalid_row = {}
+
+                # username
+                user = User.get_user(row['username']) if row['username'] else None
+                if user is None:
+                    invalid_row['username'] = translate(_(u'No user (username=${username}) found.', mapping={'username': row['username']}))
+                elif not self._can_administer(user):
+                    invalid_row['username'] = translate(_(u'${remoteUser} can not grant credit for ${username}.', mapping={'remoteUser': self.remoteUser.username,
+                                                                                                                           'username': username}))
+                else:
+                    row['user'] = user
+
+                # type and units
+                definition = None if not row['type'] or not row['units'] else self._find_credit_definition(credit_type=row['type'], credit_units=row['units'])
+                if definition is None:
+                    invalid_row['credit_definition'] = translate(_(u'No credit definition (type=${type}, units=${units}) found.', mapping={'type': row['type'],
+                                                                                                                                           'units': row['units']}))
+                else:
+                    row['credit_definition'] = definition
+
+                # date
+                try:
+                    row['date'] = self._adjust_date_time(row['date'])
+                except:
+                    invalid_row['date'] = _(u'Please use an iso8601 format date.')
+
+                # title
+                if len(row['title']) < 2:
+                    invalid_row['title'] = _(u"Please use at least 2 characters.")
+
+                # value
+                try:
+                    row['value'] = float(row['value'])
+                except ValueError:
+                    invalid_row['value'] = _(u'Please provide a number.')
+                else:
+                    if row['value'] < IUserAwardedCredit['amount'].min:
+                        invalid_row['value'] = translate(_(u'Please use a number no less than ${value}.', mapping={'value': IUserAwardedCredit['amount'].min}))
+
+                if invalid_row:
+                    invalid_row['RowNumber'] = idx + 1
+                    invalid_rows.append(invalid_row)
+
+            # If there are no invalid rows, do grant operations.
+            if not invalid_rows:
+                for row in rows:
+                    user = row['user']
+                    container = IUserAwardedCreditTranscript(user)
+
+                    new_awarded_credit = self.readCreateUpdateContentObject(self.remoteUser,
+                                                                            externalValue=self._make_external_value(row))
+                    container[new_awarded_credit.ntiid] = new_awarded_credit
+                    result.append(new_awarded_credit)
+                    logger.info('Granted credit to user (%s) (remote_user=%s)', user, self.remoteUser)
+        else:
+            raise_json_error(
+                self.request,
+                hexc.HTTPUnprocessableEntity,
+                {
+                    'message': _(u'No csv source file found.'),
+                    'code': 'MissingCSVFileError'
+                },
+                None)
+        return result
+
+    def __call__(self):
+        self.check_access()
+
+        if self._definition_container is None:
+            raise_json_error(
+                self.request,
+                hexc.HTTPUnprocessableEntity,
+                {
+                    'message': _(u'Credit definition container not setup for site.')
+                },
+                None)
+
+        invalid_rows = list()
+
+        try:
+            items = self.parse_csv(invalid_rows)
+        except ValueError as e:
+            logger.exception('Failed to parse csv file')
+            raise_json_error(
+                self.request,
+                hexc.HTTPUnprocessableEntity,
+                {
+                    'message': str(e),
+                    'code': 'InvalidCSVFileCodeError'
+                },
+                None)
+
+        # if there is any invalid row error, just raise
+        if invalid_rows:
+            raise_json_error(
+                self.request,
+                hexc.HTTPUnprocessableEntity,
+                {
+                    'code': 'InvalidRowsError',
+                    'message': _(u'Failed to grant credits to all users within the csv file.'),
+                    'InvalidRows': invalid_rows
+                },
+                None)
+
+        result = LocatedExternalDict()
+        result[ITEMS] = items
+        result[ITEM_COUNT] = result[TOTAL] = len(items)
+        return result

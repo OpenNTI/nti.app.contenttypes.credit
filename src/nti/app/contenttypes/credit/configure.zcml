@@ -20,7 +20,7 @@
     <adapter factory=".acl.CreditDefinitionACLProvider" />
 
     <!-- Adapters -->
-    <adapter name="credit"
+    <adapter name="Credit"
              for="nti.dataserver.interfaces.IDataserverFolder
                   pyramid.interfaces.IRequest"
              factory=".views.CreditPathAdapter"
@@ -93,6 +93,10 @@
                      zope.site.interfaces.INewLocalSite" />
 
     <subscriber factory=".workspaces.CreditDefinitionCollectionFactory"
+                provides="nti.appserver.workspaces.interfaces.IGlobalCollection"
+                for="nti.appserver.workspaces.interfaces.IWorkspace" />
+
+    <subscriber factory=".workspaces.CreditCollectionFactory"
                 provides="nti.appserver.workspaces.interfaces.IGlobalCollection"
                 for="nti.appserver.workspaces.interfaces.IWorkspace" />
 

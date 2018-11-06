@@ -1,0 +1,6 @@
+username,title,description,issuer,date,value,type,units
+user001,Math,final test,MathClass, 2018-10-29T00, 100, Grade, points
+user001,English,final test,EnglishClass, 2018-10-30T00:00:00Z, 50, Sport, rewards
+user001,夏令营,数学竞赛,美国,2018-09-20T00,90,成绩,分
+user002,Tennis,middle test,NextThought, 2018-10-29T00:00:00Z, 20, Sport, rewards
+user003,Golf,performance,NextThought, 2018-10-29T00:00:00Z, 0.1, Sport, scores
