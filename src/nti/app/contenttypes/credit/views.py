@@ -554,84 +554,7 @@ class UserAwardedCreditBulkCreationView(AbstractAuthenticatedView,
         result = []
 
         source = get_source(self.request, 'csv', 'input', 'source')
-        if source is not None:
-            try:
-                dialect = csv.Sniffer().sniff(source.read(), delimiters=(str('\t'), ','))
-                source.seek(0)
-                reader = csv.DictReader(source, dialect=dialect)
-            except:
-                raise ValueError(_(u"Please use tab or comma as csv delimiters."))
-
-            # check if csv file does include all required columns.
-            missing_columns = set(self._required_columns) - set(reader.fieldnames)
-            if missing_columns:
-                msg = translate(_(u"Please provide missing columns: ${val}.", mapping={'val': ', '.join(missing_columns)}))
-                raise ValueError(msg)
-
-            # normalize
-            rows = []
-            for x in reader:
-                for k,v in x.items():
-                    x[k] = text_(v.strip())
-                rows.append(x)
-
-            # do fields validation
-            for idx, row in enumerate(rows):
-                invalid_row = {}
-
-                # username
-                user = User.get_user(row['username']) if row['username'] else None
-                if user is None:
-                    invalid_row['username'] = translate(_(u'No user (username=${username}) found.', mapping={'username': row['username']}))
-                elif not self._can_administer(user):
-                    invalid_row['username'] = translate(_(u'${remoteUser} can not grant credit for ${username}.', mapping={'remoteUser': self.remoteUser.username,
-                                                                                                                           'username': username}))
-                else:
-                    row['user'] = user
-
-                # type and units
-                definition = None if not row['type'] or not row['units'] else self._find_credit_definition(credit_type=row['type'], credit_units=row['units'])
-                if definition is None:
-                    invalid_row['credit_definition'] = translate(_(u'No credit definition (type=${type}, units=${units}) found.', mapping={'type': row['type'],
-                                                                                                                                           'units': row['units']}))
-                else:
-                    row['credit_definition'] = definition
-
-                # date
-                try:
-                    row['date'] = self._adjust_date_time(row['date'])
-                except:
-                    invalid_row['date'] = _(u'Please use an iso8601 format date.')
-
-                # title
-                if len(row['title']) < 2:
-                    invalid_row['title'] = _(u"Please use at least 2 characters.")
-
-                # value
-                try:
-                    row['value'] = float(row['value'])
-                except ValueError:
-                    invalid_row['value'] = _(u'Please provide a number.')
-                else:
-                    if row['value'] < IUserAwardedCredit['amount'].min:
-                        invalid_row['value'] = translate(_(u'Please use a number no less than ${value}.', mapping={'value': IUserAwardedCredit['amount'].min}))
-
-                if invalid_row:
-                    invalid_row['RowNumber'] = idx + 1
-                    invalid_rows.append(invalid_row)
-
-            # If there are no invalid rows, do grant operations.
-            if not invalid_rows:
-                for row in rows:
-                    user = row['user']
-                    container = IUserAwardedCreditTranscript(user)
-
-                    new_awarded_credit = self.readCreateUpdateContentObject(self.remoteUser,
-                                                                            externalValue=self._make_external_value(row))
-                    container[new_awarded_credit.ntiid] = new_awarded_credit
-                    result.append(new_awarded_credit)
-                    logger.info('Granted credit to user (%s) (remote_user=%s)', user, self.remoteUser)
-        else:
+        if source is None:
             raise_json_error(
                 self.request,
                 hexc.HTTPUnprocessableEntity,
@@ -640,6 +563,83 @@ class UserAwardedCreditBulkCreationView(AbstractAuthenticatedView,
                     'code': 'MissingCSVFileError'
                 },
                 None)
+
+        try:
+            dialect = csv.Sniffer().sniff(source.read(), delimiters=(str('\t'), ','))
+            source.seek(0)
+            reader = csv.DictReader(source, dialect=dialect)
+        except:
+            raise ValueError(_(u"Please use tab or comma as csv delimiters."))
+
+        # check if csv file does include all required columns.
+        missing_columns = set(self._required_columns) - set(reader.fieldnames)
+        if missing_columns:
+            msg = translate(_(u"Please provide missing columns: ${val}.", mapping={'val': ', '.join(missing_columns)}))
+            raise ValueError(msg)
+
+        # normalize
+        rows = []
+        for x in reader:
+            for k,v in x.items():
+                x[k] = text_(v.strip())
+            rows.append(x)
+
+        # do fields validation
+        for idx, row in enumerate(rows):
+            invalid_row = {}
+
+            # username
+            user = User.get_user(row['username']) if row['username'] else None
+            if user is None:
+                invalid_row['username'] = translate(_(u'No user (username=${username}) found.', mapping={'username': row['username']}))
+            elif not self._can_administer(user):
+                invalid_row['username'] = translate(_(u'${remoteUser} can not grant credit for ${username}.', mapping={'remoteUser': self.remoteUser.username,
+                                                                                                                       'username': user.username}))
+            else:
+                row['user'] = user
+
+            # type and units
+            definition = None if not row['type'] or not row['units'] else self._find_credit_definition(credit_type=row['type'], credit_units=row['units'])
+            if definition is None:
+                invalid_row['credit_definition'] = translate(_(u'No credit definition (type=${type}, units=${units}) found.', mapping={'type': row['type'],
+                                                                                                                                       'units': row['units']}))
+            else:
+                row['credit_definition'] = definition
+
+            # date
+            try:
+                row['date'] = self._adjust_date_time(row['date'])
+            except:
+                invalid_row['date'] = _(u'Please use an iso8601 format date.')
+
+            # title
+            if len(row['title']) < 2:
+                invalid_row['title'] = _(u"Please use at least 2 characters.")
+
+            # value
+            try:
+                row['value'] = float(row['value'])
+            except ValueError:
+                invalid_row['value'] = _(u'Please provide a number.')
+            else:
+                if row['value'] < IUserAwardedCredit['amount'].min:
+                    invalid_row['value'] = translate(_(u'Please use a number no less than ${value}.', mapping={'value': IUserAwardedCredit['amount'].min}))
+
+            if invalid_row:
+                invalid_row['RowNumber'] = idx + 1
+                invalid_rows.append(invalid_row)
+
+        # If there are no invalid rows, do grant operations.
+        if not invalid_rows:
+            for row in rows:
+                user = row['user']
+                container = IUserAwardedCreditTranscript(user)
+
+                new_awarded_credit = self.readCreateUpdateContentObject(self.remoteUser,
+                                                                        externalValue=self._make_external_value(row))
+                container[new_awarded_credit.ntiid] = new_awarded_credit
+                result.append(new_awarded_credit)
+                logger.info('Granted credit to user (%s) (remote_user=%s)', user, self.remoteUser)
         return result
 
     def __call__(self):
