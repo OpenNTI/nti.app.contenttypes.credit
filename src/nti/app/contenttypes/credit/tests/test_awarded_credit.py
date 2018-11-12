@@ -346,12 +346,14 @@ class TestBulkAwardedCreditView(CreditLayerTest):
         assert_that(result, has_entries({'message': 'Credit definition container not setup for site.'}))
 
     @WithSharedApplicationMockDS(testapp=True, users=True)
-    @fudge.patch('nti.app.users.utils.admin.SiteAdminUtility.can_administer_user')
-    def test_bulk_awarded_credit(self, mock_can_administer):
+    @fudge.patch('nti.app.users.utils.admin.SiteAdminUtility.can_administer_user',
+                 'nti.app.contenttypes.credit.views.UserAwardedCreditBulkCreationView._is_user_in_current_site')
+    def test_bulk_awarded_credit(self, mock_can_administer, mock_in_site):
         """
         Test bulk create awarded credit to users. only nt and site admin could access.
         """
         mock_can_administer.is_callable().returns(False)
+        mock_in_site.is_callable().returns(True)
 
         with mock_dataserver.mock_db_trans(self.ds):
             for username in (u'user001', u'user002', u'user003'):

@@ -23,6 +23,8 @@ from requests.structures import CaseInsensitiveDict
 from zope import component
 from zope import interface
 
+from zope.component.hooks import getSite
+
 from zope.cachedescriptors.property import Lazy
 
 from zope.container.contained import Contained
@@ -48,6 +50,8 @@ from nti.app.externalization.error import raise_json_error
 
 from nti.app.externalization.view_mixins import BatchingUtilsMixin
 from nti.app.externalization.view_mixins import ModeledContentUploadRequestUtilsMixin
+
+from nti.app.users.utils import get_user_creation_site
 
 from nti.appserver.ugd_edit_views import UGDPutView
 from nti.appserver.ugd_edit_views import UGDDeleteView
@@ -507,6 +511,10 @@ class UserAwardedCreditBulkCreationView(AbstractAuthenticatedView,
             return timezone_util.get_timezone_display_name()
         return None
 
+    @Lazy
+    def _current_site(self):
+        return getSite()
+
     def _adjust_date_time(self, strDate):
         """
         If strDate doesn't include timezone information,
@@ -515,6 +523,10 @@ class UserAwardedCreditBulkCreationView(AbstractAuthenticatedView,
         if self._local_tzname:
             return datetime_from_string(strDate, assume_local=True, local_tzname=self._local_tzname)
         return datetime_from_string(strDate)
+
+    def _is_user_in_current_site(self, user):
+        user_creation_site = get_user_creation_site(user)
+        return bool(user_creation_site is not None and user_creation_site == self._current_site)
 
     def _can_administer(self, user):
         if self._is_admin:
@@ -590,7 +602,7 @@ class UserAwardedCreditBulkCreationView(AbstractAuthenticatedView,
 
             # username
             user = User.get_user(row['username']) if row['username'] else None
-            if user is None:
+            if user is None or not self._is_user_in_current_site(user):
                 invalid_row['username'] = translate(_(u'No user (username=${username}) found.', mapping={'username': row['username']}))
             elif not self._can_administer(user):
                 invalid_row['username'] = translate(_(u'${remoteUser} can not grant credit for ${username}.', mapping={'remoteUser': self.remoteUser.username,
