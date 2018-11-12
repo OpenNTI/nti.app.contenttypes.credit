@@ -347,7 +347,7 @@ class TestBulkAwardedCreditView(CreditLayerTest):
 
     @WithSharedApplicationMockDS(testapp=True, users=True)
     @fudge.patch('nti.app.users.utils.admin.SiteAdminUtility.can_administer_user',
-                 'nti.app.contenttypes.credit.views.UserAwardedCreditBulkCreationView._is_user_in_site')
+                 'nti.app.contenttypes.credit.views.UserAwardedCreditBulkCreationView._is_user_in_current_site')
     def test_bulk_awarded_credit(self, mock_can_administer, mock_in_site):
         """
         Test bulk create awarded credit to users. only nt and site admin could access.
