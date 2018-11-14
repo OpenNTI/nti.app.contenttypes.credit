@@ -85,6 +85,8 @@ from nti.externalization.datetime import datetime_from_string
 from nti.externalization.interfaces import LocatedExternalDict
 from nti.externalization.interfaces import StandardExternalFields
 
+from nti.externalization.externalization import to_external_object
+
 ITEMS = StandardExternalFields.ITEMS
 TOTAL = StandardExternalFields.TOTAL
 ITEM_COUNT = StandardExternalFields.ITEM_COUNT
@@ -650,7 +652,7 @@ class UserAwardedCreditBulkCreationView(AbstractAuthenticatedView,
                 new_awarded_credit = self.readCreateUpdateContentObject(self.remoteUser,
                                                                         externalValue=self._make_external_value(row))
                 container[new_awarded_credit.ntiid] = new_awarded_credit
-                result.append(new_awarded_credit)
+                result.append((user, new_awarded_credit))
                 logger.info('Granted credit to user (%s) (remote_user=%s)', user, self.remoteUser)
         return result
 
@@ -669,7 +671,7 @@ class UserAwardedCreditBulkCreationView(AbstractAuthenticatedView,
         invalid_rows = list()
 
         try:
-            items = self.parse_csv(invalid_rows)
+            data = self.parse_csv(invalid_rows)
         except ValueError as e:
             logger.exception('Failed to parse csv file')
             raise_json_error(
@@ -692,6 +694,14 @@ class UserAwardedCreditBulkCreationView(AbstractAuthenticatedView,
                     'InvalidRows': invalid_rows
                 },
                 None)
+
+        # decorate user.
+        items = []
+        for user, credit in data or ():
+            item = to_external_object(credit)
+            if 'user' not in item:
+                item['user'] = user
+            items.append(item)
 
         result = LocatedExternalDict()
         result[ITEMS] = items
