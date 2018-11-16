@@ -426,7 +426,7 @@ class TestBulkAwardedCreditView(CreditLayerTest):
 
         # invalid data, both rows are invalid
         content = self._make_csv_content(rows=['user001, d, , , 2018-09-20T00, 52, Grade,points',
-                                               'user001, dd, , , 2018-09-20T00, 0, Grade,points',
+                                               'user001, "dd", , , 2018-09-20T00, 0, Grade,points',
                                                'user001, dd, , , 2018-09-02T00, 52, match, inches'])
         result = self._upload_file(self.source_info, content=content, status=422).json_body
         assert_that(result, has_entries({'code': 'InvalidRowsError',
@@ -435,6 +435,19 @@ class TestBulkAwardedCreditView(CreditLayerTest):
         assert_that(result['InvalidRows'], has_items(has_entries({'RowNumber': 1, 'title': 'Please use at least 2 characters.'}),
                                                      has_entries({'RowNumber': 2, 'value': 'Please use a number no less than 0.1.'}),
                                                      has_entries({'RowNumber': 3, 'credit_definition': 'No credit definition (type=match, units=inches) found.'})))
+
+        content = """username,title,description,issuer,date,value,type,units
+user001,"d\nd","a\na","s\ns",2018-09-10,you,k,z
+user001,dd, dd,dd,2018-09-20T00:00:00Z,3,grade,points"""
+        result = self._upload_file(self.source_info, content=content, status=422).json_body
+        assert_that(result['InvalidRows'], has_length(1))
+        assert_that(result['InvalidRows'][0], has_entries({'RowNumber': 1,
+                                                           'description': u'Description can not contain newline character.',
+                                                           'title': u'Title can not contain newline character.',
+                                                           'value': u'Please provide a number.',
+                                                           'date': u'Please use an iso8601 format date.',
+                                                           'credit_definition': u'No credit definition (type=k, units=z) found.',
+                                                           'issuer': u'Issuer can not contain newline character.'}))
 
         with mock_dataserver.mock_db_trans(self.ds):
             interface.noLongerProvides(deleted_credit_def, IDeletedObjectPlaceholder)
