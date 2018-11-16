@@ -390,7 +390,7 @@ class TestBulkAwardedCreditView(CreditLayerTest):
         content = self._make_csv_content(rows=[', , , , , , ,'])
         result = self._upload_file(self.source_info, content=content, status=422).json_body
         assert_that(result, has_entries({'code': 'InvalidRowsError',
-                                         'message': 'Failed to grant credits to all users within the csv file.',
+                                         'message': 'No credits were applied. There was a problem importing the data.',
                                          'InvalidRows': has_length(1)}))
         assert_that(result['InvalidRows'][0], has_entries({'RowNumber': 1,
                                                            'username': 'No user (username=) found.',
@@ -403,7 +403,7 @@ class TestBulkAwardedCreditView(CreditLayerTest):
         content = self._make_csv_content(rows=['non-user, d, , , 2018-09-20, xyz, Grade,points'])
         result = self._upload_file(self.source_info, content=content, status=422).json_body
         assert_that(result, has_entries({'code': 'InvalidRowsError',
-                                         'message': 'Failed to grant credits to all users within the csv file.',
+                                         'message': 'No credits were applied. There was a problem importing the data.',
                                          'InvalidRows': has_length(1)}))
         assert_that(result['InvalidRows'][0], has_entries({'RowNumber': 1,
                                                            'username': 'No user (username=non-user) found.',
@@ -430,7 +430,7 @@ class TestBulkAwardedCreditView(CreditLayerTest):
                                                'user001, dd, , , 2018-09-02T00, 52, match, inches'])
         result = self._upload_file(self.source_info, content=content, status=422).json_body
         assert_that(result, has_entries({'code': 'InvalidRowsError',
-                                         'message': 'Failed to grant credits to all users within the csv file.',
+                                         'message': 'No credits were applied. There was a problem importing the data.',
                                          'InvalidRows': has_length(3)}))
         assert_that(result['InvalidRows'], has_items(has_entries({'RowNumber': 1, 'title': 'Please use at least 2 characters.'}),
                                                      has_entries({'RowNumber': 2, 'value': 'Please use a number no less than 0.1.'}),
@@ -457,7 +457,7 @@ user001,dd, dd,dd,2018-09-20T00:00:00Z,3,grade,points"""
                                                'user001, dd, , , 2018-09-20T00, 52, match,inches'])
         result = self._upload_file(self.source_info, content=content, status=422).json_body
         assert_that(result, has_entries({'code': 'InvalidRowsError',
-                                         'message': 'Failed to grant credits to all users within the csv file.',
+                                         'message': 'No credits were applied. There was a problem importing the data.',
                                          'InvalidRows': has_length(1)}))
         assert_that(result['InvalidRows'], has_items(has_entries({'RowNumber': 1, 'title': 'Please use at least 2 characters.'})))
 

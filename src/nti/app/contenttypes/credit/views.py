@@ -723,7 +723,7 @@ class UserAwardedCreditBulkCreationView(AbstractAuthenticatedView,
                 hexc.HTTPUnprocessableEntity,
                 {
                     'code': 'InvalidRowsError',
-                    'message': _(u'Failed to grant credits to all users within the csv file.'),
+                    'message': _(u'No credits were applied. There was a problem importing the data.'),
                     'InvalidRows': invalid_rows
                 },
                 None)
