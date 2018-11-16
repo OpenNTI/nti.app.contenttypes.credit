@@ -29,6 +29,8 @@ from zope.cachedescriptors.property import Lazy
 
 from zope.container.contained import Contained
 
+from zope.schema.interfaces import ConstraintNotSatisfied
+
 from zope.traversing.interfaces import IPathAdapter
 
 from zope.i18n import translate
@@ -595,6 +597,8 @@ class UserAwardedCreditBulkCreationView(AbstractAuthenticatedView,
         rows = []
         for x in reader:
             for k,v in x.items():
+                if not isinstance(v, basestring):
+                    v = str(v) # prevent bad data.
                 x[k] = text_(v.strip())
             rows.append(x)
 
@@ -629,6 +633,11 @@ class UserAwardedCreditBulkCreationView(AbstractAuthenticatedView,
             # title
             if len(row['title']) < 2:
                 invalid_row['title'] = _(u"Please use at least 2 characters.")
+            else:
+                try:
+                    IUserAwardedCredit['title'].validate(row['title'])
+                except ConstraintNotSatisfied as e:
+                    invalid_row['title'] = _(u"Title can not contain newline character.")
 
             # value
             try:
@@ -639,6 +648,20 @@ class UserAwardedCreditBulkCreationView(AbstractAuthenticatedView,
                 if row['value'] < IUserAwardedCredit['amount'].min:
                     invalid_row['value'] = translate(_(u'Please use a number no less than ${value}.', mapping={'value': IUserAwardedCredit['amount'].min}))
 
+            # description, optional
+            if row.get('description'):
+                try:
+                    IUserAwardedCredit['description'].validate(row['description'])
+                except ConstraintNotSatisfied as e:
+                    invalid_row['description'] = _(u"Description can not contain newline character.")
+
+            # issuer, optional
+            if row.get('issuer'):
+                try:
+                    IUserAwardedCredit['issuer'].validate(row['issuer'])
+                except ConstraintNotSatisfied as e:
+                    invalid_row['issuer'] = _(u"Issuer can not contain newline character.")
+
             if invalid_row:
                 invalid_row['RowNumber'] = idx + 1
                 invalid_rows.append(invalid_row)
@@ -648,7 +671,6 @@ class UserAwardedCreditBulkCreationView(AbstractAuthenticatedView,
             for row in rows:
                 user = row['user']
                 container = IUserAwardedCreditTranscript(user)
-
                 new_awarded_credit = self.readCreateUpdateContentObject(self.remoteUser,
                                                                         externalValue=self._make_external_value(row))
                 container[new_awarded_credit.ntiid] = new_awarded_credit
@@ -679,6 +701,17 @@ class UserAwardedCreditBulkCreationView(AbstractAuthenticatedView,
                 hexc.HTTPUnprocessableEntity,
                 {
                     'message': str(e),
+                    'code': 'InvalidCSVFileCodeError'
+                },
+                None)
+
+        except csv.Error as e:
+            logger.exception(str(e))
+            raise_json_error(
+                self.request,
+                hexc.HTTPUnprocessableEntity,
+                {
+                    'message': translate(_(u'Column can not be more than ${maxsize} characters.', mapping={'maxsize': csv.field_size_limit()})),
                     'code': 'InvalidCSVFileCodeError'
                 },
                 None)

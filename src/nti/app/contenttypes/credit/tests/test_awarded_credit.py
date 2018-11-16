@@ -502,7 +502,7 @@ class TestBulkAwardedCreditView(CreditLayerTest):
                                                      'amount': 52,
                                                      'user': not_none(),
                                                      'MimeType': 'application/vnd.nextthought.credit.userawardedcredit'}))
-        assert_that(result['Items'][0]['user']['username'], is_('user002'))
+        assert_that(result['Items'][0]['user']['Username'], is_('user002'))
 
         # authentication, only nextthought and site admins could access this view.
         mock_can_administer.is_callable().returns(True)
