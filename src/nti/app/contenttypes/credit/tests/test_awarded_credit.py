@@ -148,7 +148,7 @@ class TestAwardedCredit(CreditLayerTest):
         awarded_def = {'MimeType': UserAwardedCredit.mime_type,
                        'title': title,
                        'description': desc,
-                       'credit_definition': credit_definition_obj,
+                       'credit_definition': credit_definition_obj['NTIID'],
                        'awarded_date': "2013-08-13T06:00:00+00:00",
                        'amount': amount}
 
