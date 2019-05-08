@@ -16,7 +16,6 @@ from hamcrest import calling
 from hamcrest import raises
 from hamcrest import contains
 from hamcrest import not_none
-from hamcrest import has_item
 from hamcrest import has_items
 from hamcrest import has_entry
 from hamcrest import has_length
@@ -57,8 +56,6 @@ from nti.contenttypes.credit.credit import CreditDefinitionContainer
 from nti.contenttypes.credit.interfaces import ICreditDefinitionContainer
 
 from nti.dataserver.authorization import ROLE_SITE_ADMIN
-
-from nti.dataserver.users.common import set_user_creation_site
 
 from nti.dataserver.tests import mock_dataserver
 
@@ -477,33 +474,33 @@ user001,dd, dd,dd,2018-09-20T00:00:00Z,3,grade,points"""
 
         with mock_dataserver.mock_db_trans(self.ds):
             transcript = IUserAwardedCreditTranscript(User.get_user('user001'))
-            credits = sorted([x for x in transcript.iter_awarded_credits()], key=lambda x: x.amount)
-            assert_that(credits, has_length(3))
-            assert_that(credits[0], has_properties({'title': 'English',
-                                                    'amount': 50,
-                                                    'credit_definition': has_properties({'credit_type': 'sport', 'credit_units': 'rewards'})}))
-            assert_that(credits[1], has_properties({'title': text_('夏令营'),
-                                                    'description': text_('数学竞赛'),
-                                                    'issuer': text_('美国'),
-                                                    'amount': 90,
-                                                    'credit_definition': has_properties({'credit_type': text_('成绩'), 'credit_units': text_('分')})}))
-            assert_that(credits[2], has_properties({'title': 'Math',
-                                                    'amount': 100,
-                                                    'credit_definition': has_properties({'credit_type': 'grade', 'credit_units': 'points'})}))
+            awarded_credits = sorted([x for x in transcript.iter_awarded_credits()], key=lambda x: x.amount)
+            assert_that(awarded_credits, has_length(3))
+            assert_that(awarded_credits[0], has_properties({'title': 'English',
+                                                            'amount': 50,
+                                                            'credit_definition': has_properties({'credit_type': 'sport', 'credit_units': 'rewards'})}))
+            assert_that(awarded_credits[1], has_properties({'title': text_('夏令营'),
+                                                            'description': text_('数学竞赛'),
+                                                            'issuer': text_('美国'),
+                                                            'amount': 90,
+                                                            'credit_definition': has_properties({'credit_type': text_('成绩'), 'credit_units': text_('分')})}))
+            assert_that(awarded_credits[2], has_properties({'title': 'Math',
+                                                            'amount': 100,
+                                                            'credit_definition': has_properties({'credit_type': 'grade', 'credit_units': 'points'})}))
 
             transcript = IUserAwardedCreditTranscript(User.get_user('user002'))
-            credits = [x for x in transcript.iter_awarded_credits()]
-            assert_that(credits, has_length(1))
-            assert_that(credits[0], has_properties({'title': 'Tennis',
-                                                    'amount': 20,
-                                                    'credit_definition': has_properties({'credit_type': 'sport', 'credit_units': 'rewards'})}))
+            awarded_credits = [x for x in transcript.iter_awarded_credits()]
+            assert_that(awarded_credits, has_length(1))
+            assert_that(awarded_credits[0], has_properties({'title': 'Tennis',
+                                                            'amount': 20,
+                                                            'credit_definition': has_properties({'credit_type': 'sport', 'credit_units': 'rewards'})}))
 
             transcript = IUserAwardedCreditTranscript(User.get_user('user003'))
-            credits = [x for x in transcript.iter_awarded_credits()]
-            assert_that(credits, has_length(1))
-            assert_that(credits[0], has_properties({'title': 'Golf',
-                                                    'amount': 0.1,
-                                                    'credit_definition': has_properties({'credit_type': 'sport', 'credit_units': 'scores'})}))
+            awarded_credits = [x for x in transcript.iter_awarded_credits()]
+            assert_that(awarded_credits, has_length(1))
+            assert_that(awarded_credits[0], has_properties({'title': 'Golf',
+                                                            'amount': 0.1,
+                                                            'credit_definition': has_properties({'credit_type': 'sport', 'credit_units': 'scores'})}))
 
         # only contains required columns
         content = self._make_csv_content(header='username,title,date,value,type,units',
