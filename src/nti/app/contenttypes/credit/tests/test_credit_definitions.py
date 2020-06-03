@@ -15,8 +15,6 @@ from hamcrest import assert_that
 from hamcrest import has_entries
 does_not = is_not
 
-from zope import component
-
 from nti.app.contenttypes.credit import CREDIT_DEFINITIONS_VIEW_NAME
 
 from nti.app.contenttypes.credit.tests import CreditLayerTest
@@ -24,9 +22,6 @@ from nti.app.contenttypes.credit.tests import CreditLayerTest
 from nti.app.testing.decorators import WithSharedApplicationMockDS
 
 from nti.contenttypes.credit.credit import CreditDefinition
-from nti.contenttypes.credit.credit import CreditDefinitionContainer
-
-from nti.contenttypes.credit.interfaces import ICreditDefinitionContainer
 
 
 class TestCreditDefinitions(CreditLayerTest):
@@ -35,15 +30,6 @@ class TestCreditDefinitions(CreditLayerTest):
     """
 
     admin_user = u"sjohnson@nextthought.com"
-
-    def setUp(self):
-        self.container = CreditDefinitionContainer()
-        component.getGlobalSiteManager().registerUtility(self.container,
-                                                         ICreditDefinitionContainer)
-
-    def tearDown(self):
-        component.getGlobalSiteManager().unregisterUtility(self.container,
-                                                           ICreditDefinitionContainer)
 
     @WithSharedApplicationMockDS(testapp=True, users=True)
     def test_workspace(self):
@@ -86,71 +72,76 @@ class TestCreditDefinitions(CreditLayerTest):
         other_credit_def = {'MimeType': CreditDefinition.mime_type,
                             'credit_type': 'other_types',
                             'credit_units': 'new_units'}
+        self.install_credit_definition_container()
+        try:
+            res = self.testapp.put_json(credit_def_url, credit_def)
+            res = res.json_body
+            original_ntiid = res['NTIID']
+            def_href = res.get('href')
+            assert_that(def_href, not_none())
+            assert_that(res, has_entries('credit_units', is_('new_units'),
+                                         'credit_type', is_('new_types'),
+                                         'NTIID', not_none()))
+            self.require_link_href_with_rel(res, 'edit')
+            self.require_link_href_with_rel(res, 'delete')
 
-        res = self.testapp.put_json(credit_def_url, credit_def)
-        res = res.json_body
-        original_ntiid = res['NTIID']
-        def_href = res.get('href')
-        assert_that(def_href, not_none())
-        assert_that(res, has_entries('credit_units', is_('new_units'),
-                                     'credit_type', is_('new_types'),
-                                     'NTIID', not_none()))
-        self.require_link_href_with_rel(res, 'edit')
-        self.require_link_href_with_rel(res, 'delete')
+            # De-duped raises a 409
+            self.testapp.put_json(credit_def_url, credit_def, status=409)
 
-        # De-duped raises a 409
-        self.testapp.put_json(credit_def_url, credit_def, status=409)
+            # Edit
+            new_units = 'new_new_units'
+            new_type = 'new_new_type'
+            res = self.testapp.put_json(def_href,
+                                        {'credit_type': new_type,
+                                         'credit_units': new_units})
+            res = res.json_body
+            assert_that(res['credit_type'], is_(new_type))
+            assert_that(res['credit_units'], is_(new_units))
 
-        # Edit
-        new_units = 'new_new_units'
-        new_type = 'new_new_type'
-        res = self.testapp.put_json(def_href,
-                                    {'credit_type': new_type,
-                                     'credit_units': new_units})
-        res = res.json_body
-        assert_that(res['credit_type'], is_(new_type))
-        assert_that(res['credit_units'], is_(new_units))
+            # Get
+            credit_res = self.testapp.get(credit_def_url)
+            credit_res = credit_res.json_body
+            credit_items = credit_res.get('Items')
+            assert_that(credit_items, has_length(1))
 
-        # Get
-        credit_res = self.testapp.get(credit_def_url)
-        credit_res = credit_res.json_body
-        credit_items = credit_res.get('Items')
-        assert_that(credit_items, has_length(1))
+            # Delete
+            self.testapp.delete(def_href)
 
-        # Delete
-        self.testapp.delete(def_href)
+            credit_res = self.testapp.get(credit_def_url)
+            credit_res = credit_res.json_body
+            credit_items = credit_res.get('Items')
+            assert_that(credit_items, has_length(0))
 
-        credit_res = self.testapp.get(credit_def_url)
-        credit_res = credit_res.json_body
-        credit_items = credit_res.get('Items')
-        assert_that(credit_items, has_length(0))
+            # Fetch deleted too
+            credit_res = self.testapp.get('%s?hide_deleted=False' % credit_def_url)
+            credit_res = credit_res.json_body
+            credit_items = credit_res.get('Items')
+            assert_that(credit_items, has_length(1))
+            assert_that(credit_items[0], has_entries('credit_units', is_(new_units),
+                                                     'credit_type', is_(new_type),
+                                                     'deleted', is_(True),
+                                                     'NTIID', is_(original_ntiid)))
 
-        # Fetch deleted too
-        credit_res = self.testapp.get('%s?hide_deleted=False' % credit_def_url)
-        credit_res = credit_res.json_body
-        credit_items = credit_res.get('Items')
-        assert_that(credit_items, has_length(1))
-        assert_that(credit_items[0], has_entries('credit_units', is_(new_units),
-                                                 'credit_type', is_(new_type),
-                                                 'deleted', is_(True),
-                                                 'NTIID', is_(original_ntiid)))
+            # Recreate by posting some object to def container
+            self.testapp.put_json(credit_def_url,
+                                  {'MimeType': CreditDefinition.mime_type,
+                                   'credit_type': new_type,
+                                   'credit_units': new_units})
 
-        # Recreate by posting some object to def container
-        self.testapp.put_json(credit_def_url,
-                              {'MimeType': CreditDefinition.mime_type,
-                               'credit_type': new_type,
-                               'credit_units': new_units})
+            credit_res = self.testapp.get(credit_def_url)
+            credit_res = credit_res.json_body
+            credit_items = credit_res.get('Items')
+            assert_that(credit_items, has_length(1))
+            def_item = credit_items[0]
+            assert_that(def_item['NTIID'], is_(original_ntiid))
+            assert_that(def_item['deleted'], is_(False))
 
-        credit_res = self.testapp.get(credit_def_url)
-        credit_res = credit_res.json_body
-        credit_items = credit_res.get('Items')
-        assert_that(credit_items, has_length(1))
-        def_item = credit_items[0]
-        assert_that(def_item['NTIID'], is_(original_ntiid))
-        assert_that(def_item['deleted'], is_(False))
+            # Cannot edit to a dupe
+            res = self.testapp.put_json(credit_def_url, other_credit_def)
+            other_def_href = res.json_body.get('href')
+            self.testapp.put_json(other_def_href, {'credit_type': new_type,
+                                                   'credit_units': new_units}, status=409)
 
-        # Cannot edit to a dupe
-        res = self.testapp.put_json(credit_def_url, other_credit_def)
-        other_def_href = res.json_body.get('href')
-        self.testapp.put_json(other_def_href, {'credit_type': new_type,
-                                               'credit_units': new_units}, status=409)
+        finally:
+            self.uninstall_credit_definition_container()
+
