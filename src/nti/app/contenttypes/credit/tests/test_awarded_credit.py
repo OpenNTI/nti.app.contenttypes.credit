@@ -499,7 +499,7 @@ class TestBulkAwardedCreditView(CreditLayerTest):
                                              rows=['user002, "math", 2018-09-20T00, 52, Grade,points'])
             result = self._upload_file(self.source_info, content=content, status=200).json_body
             assert_that(result['Items'][0], has_entries({'title': 'math',
-                                                         'issuer': None,
+                                                         'issuer': 'dataserver2',
                                                          'description': None,
                                                          'amount': 52,
                                                          'user': not_none(),

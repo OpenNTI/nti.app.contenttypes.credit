@@ -77,6 +77,7 @@ class AwardedCredit(PersistentCreatedAndModifiedTimeObject,
         result = None
         site = getSite()
         if site is not None:
+            result = site.__name__
             host_utility = component.queryUtility(IPreferredAppHostnameProvider)
             if host_utility:
                 result = host_utility.get_preferred_hostname(result)
