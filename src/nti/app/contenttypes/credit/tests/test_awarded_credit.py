@@ -146,7 +146,8 @@ class TestAwardedCredit(CreditLayerTest):
             awarded_credit_ntiid1 = res.get('NTIID')
             assert_that(res, has_entries('title', is_(title),
                                          'description', is_(desc),
-                                         'credit_definition', has_entry('NTIID', credit_definition_ntiid),
+                                         'credit_definition', has_entries('NTIID', credit_definition_ntiid,
+                                                                          'credit_precision', 2),
                                          'amount', is_(amount),
                                          'NTIID', not_none()))
             self.require_link_href_with_rel(res, 'edit')

@@ -91,12 +91,15 @@ class TestCreditDefinitions(CreditLayerTest):
             # Edit
             new_units = 'new_new_units'
             new_type = 'new_new_type'
+            new_precision = 1
             res = self.testapp.put_json(def_href,
                                         {'credit_type': new_type,
-                                         'credit_units': new_units})
+                                         'credit_units': new_units,
+                                         'credit_precision': new_precision})
             res = res.json_body
             assert_that(res['credit_type'], is_(new_type))
             assert_that(res['credit_units'], is_(new_units))
+            assert_that(res['credit_precision'], is_(new_precision))
 
             # Get
             credit_res = self.testapp.get(credit_def_url)
