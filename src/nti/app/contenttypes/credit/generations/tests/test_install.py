@@ -24,4 +24,4 @@ class TestFunctionalInstall(ApplicationLayerTest):
         with mock_db_trans(self.ds) as conn:
             root = conn.root()
             generations = root['zope.generations']
-            assert_that(generations, has_key('nti.dataserver-app-assessment'))
+            assert_that(generations, has_key('nti.dataserver-app-contenttypes-credit'))
